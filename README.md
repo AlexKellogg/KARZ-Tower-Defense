@@ -18,7 +18,9 @@ py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe preview.py
 ```
 
-Click to place a test tower; press B to show buildable zones, Z to remove the latest tower, and Esc to exit. The moving red marker demonstrates the ordered enemy route. This is a map integration preview, without combat, waves, or economy.
+Click a green spot to place a base tower. Click a tower to select it and see its range, then press **Upgrade (free)** or U to upgrade it (3 levels). Right-click deselects, B shows buildable zones, Z removes the latest tower, and Esc exits. Placeholder enemies spawn continuously along the route; towers target the enemy furthest along the path within range. The bottom bar shows towers, kills, and enemies that leaked. There is no economy yet: upgrades are free and enemy stats are placeholders.
+
+On macOS, use `python3 -m venv .venv`, then `.venv/bin/python` in place of `.\.venv\Scripts\python.exe` in the commands above and below.
 
 ## Open in Tiled
 
