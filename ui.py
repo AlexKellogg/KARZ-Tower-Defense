@@ -30,6 +30,20 @@ ON_BG_SOFT = (150, 104, 52)
 FONT_STACK = 'avenirnext,avenir,segoeui,inter,helveticaneue,arial'
 
 
+_mouse = [(-1000, -1000)]
+
+
+def mouse_pos():
+    return _mouse[0]
+
+
+def track_mouse(event):
+    if event.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP):
+        _mouse[0] = event.pos
+    elif event.type == pygame.WINDOWLEAVE:
+        _mouse[0] = (-1000, -1000)
+
+
 def setup_display(title):
     global S
     try:
@@ -298,10 +312,11 @@ class Button:
     def draw(self, surface, hover=None):
         r = self.rect
         if hover is None:
-            hover = r.collidepoint(pygame.mouse.get_pos())
+            hover = r.collidepoint(mouse_pos())
+        size, tracking = (14, 2) if r.w >= 110 else (12, 1)
         if self.style == 'primary':
             rounded(surface, r, BUTTON_HOVER if hover else BUTTON, 8)
-            text(surface, self.label.upper(), 14, WHITE, r.center, bold=True, anchor='center', tracking=2)
+            text(surface, self.label.upper(), size, WHITE, r.center, bold=True, anchor='center', tracking=tracking)
         elif self.style == 'hero':
             rounded(surface, r.move(0, 4), (16, 28, 64), r.h//2)
             rounded(surface, r, BUTTON_HOVER if hover else BUTTON, r.h//2)
@@ -311,7 +326,13 @@ class Button:
             icon(surface, self.icon_name, ON_BG, 20, r.center)
         elif self.style == 'secondary':
             rounded(surface, r, PAPER_HOVER if hover else PAPER, 8, PAPER_EDGE, 1)
-            text(surface, self.label.upper(), 14, INK, r.center, bold=True, anchor='center', tracking=2)
+            text(surface, self.label.upper(), size, INK, r.center, bold=True, anchor='center', tracking=tracking)
+        elif self.style == 'disabled':
+            rounded(surface, r, (236, 230, 220), 8, (222, 212, 196), 1)
+            text(surface, self.label.upper(), 14, (170, 156, 136), r.center, bold=True, anchor='center', tracking=2)
+        elif self.style == 'small':
+            rounded(surface, r, PAPER_HOVER if hover else PAPER, r.h//2, PAPER_EDGE, 1)
+            text(surface, self.label, 12, BUTTON, r.center, bold=True, anchor='center')
         else:
             rect = text(surface, self.label, 14, BUTTON, r.center, anchor='center')
             if hover:
