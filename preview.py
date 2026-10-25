@@ -22,6 +22,7 @@ def main():
         while state['running']:
             dt = 0.05 if args.smoke else min(clock.tick(60)/1000, 0.05)
             for event in pygame.event.get():
+                ui.track_mouse(event)
                 if event.type in (pygame.QUIT, pygame.WINDOWCLOSE):
                     state['running'] = False
                 else:
