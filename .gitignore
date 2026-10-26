@@ -3,3 +3,4 @@ __pycache__/
 *.py[cod]
 .deps/
 *.zip
+karz_server.db

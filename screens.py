@@ -34,6 +34,8 @@ class App:
         self.go(HomeScreen(self))
 
     def log_out(self):
+        if self.account is not None and hasattr(self.backend, 'log_out'):
+            self.backend.log_out(self.account)
         self.account = None
         self.go(LoginScreen(self))
 
@@ -249,11 +251,15 @@ class MapSelectScreen:
         self.app = app
         self.back = Button((24, 22, 46, 46), '', 'ghost', 'back')
         self.cards = [pygame.Rect(44+i*224, 168, 200, 280) for i in range(len(DIFFICULTIES))]
-        self.unlocked = app.backend.unlocked_difficulties(app.account)
+        self.hint = ''
+        try:
+            self.unlocked = app.backend.unlocked_difficulties(app.account)
+        except AccountError as e:
+            self.unlocked = ()
+            self.hint = str(e)
         self.thumb = ui.load_image(MAP_IMAGE, (176, 106), radius=8)
         self.locked_thumb = self.thumb.copy()
         self.locked_thumb.fill((120, 110, 100, 255), special_flags=pygame.BLEND_RGBA_MULT)
-        self.hint = ''
 
     def is_open(self, difficulty):
         return difficulty['name'] in self.unlocked
@@ -270,6 +276,8 @@ class MapSelectScreen:
                 if not rect.collidepoint(event.pos):
                     continue
                 if not self.is_open(difficulty):
+                    if not self.unlocked:
+                        return
                     self.hint = f'Beat {DIFFICULTY_NAMES[i-1]} to unlock {difficulty["name"]}.'
                     return
                 play, sandbox = self.buttons(rect.move(0, -6))
@@ -285,7 +293,7 @@ class MapSelectScreen:
         ui.background(screen)
         self.back.draw(screen)
         ui.text(screen, 'Choose a difficulty', 32, ui.ON_BG, (480, 74), bold=True, anchor='center')
-        if self.app.account.is_admin:
+        if self.app.account.is_admin and self.unlocked:
             subtitle = 'Admin: every difficulty is unlocked.'
         else:
             subtitle = self.hint or 'Beat a difficulty to unlock the next one and its sandbox.'
@@ -328,7 +336,12 @@ class LeaderboardScreen:
         self.load()
 
     def load(self):
-        self.entries = self.app.backend.leaderboard(self.kind, self.difficulty)
+        self.error = ''
+        try:
+            self.entries = self.app.backend.leaderboard(self.kind, self.difficulty)
+        except AccountError as e:
+            self.entries = []
+            self.error = str(e)
 
     def handle(self, event):
         if self.back.clicked(event) or pressed_escape(event):
@@ -374,7 +387,9 @@ class LeaderboardScreen:
         for x, label in columns:
             ui.text(screen, label.upper(), 11, ui.MUTED, (x, 194), bold=True, tracking=1)
         ui.line(screen, ui.PAPER_EDGE, (166, 214), (794, 214))
-        if not self.entries:
+        if self.error:
+            ui.text(screen, self.error, 15, ui.ERROR, (480, 400), anchor='center')
+        elif not self.entries:
             message = 'No games yet. Play one to get on the board!' if self.kind == 'score' else 'No wins yet. Beat a level to get on the board!'
             ui.text(screen, message, 15, ui.MUTED, (480, 400), anchor='center')
         for i, entry in enumerate(self.entries):
