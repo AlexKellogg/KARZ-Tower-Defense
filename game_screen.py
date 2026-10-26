@@ -5,7 +5,7 @@ import pygame
 import ui
 from backend import DIFFICULTY_NAMES
 from enemy import PlaceholderEnemy
-from game_session import TOTAL_WAVES, GameSession, format_time
+from game_session import TOTAL_WAVES, GameClock, GameSession, format_time
 from map_runtime import load_map
 from tower import BASE_TOWER_LEVELS, Tower
 
@@ -80,12 +80,15 @@ class GameScreen:
         self.art = pygame.transform.smoothscale(self.map.artwork, (ui.px(MAP_SIZE[0]), ui.px(MAP_SIZE[1])))
         self.upgrade_button = pygame.Rect(790, 586, 155, 44)
         self.menu_button = pygame.Rect(676, 586, 104, 44)
+        self.pause_button = pygame.Rect(564, 586, 50, 44)
+        self.speed_button = pygame.Rect(620, 586, 50, 44)
         self.levels_button = ui.Button((330, 418, 142, 44), 'Levels', 'secondary')
         self.again_button = ui.Button((488, 418, 142, 44), 'Play again')
         self.restart()
 
     def restart(self):
         self.session = GameSession(self.difficulty['name'], sandbox=self.sandbox)
+        self.clock = GameClock()
         self.towers, self.enemies, self.shots = [], [], []
         self.selected = None
         self.show_zones = False
@@ -120,6 +123,10 @@ class GameScreen:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 self.on_exit()
+            elif event.key in (pygame.K_SPACE, pygame.K_p):
+                self.clock.toggle_pause()
+            elif event.key == pygame.K_f:
+                self.clock.cycle_speed()
             elif event.key == pygame.K_b:
                 self.show_zones = not self.show_zones
             elif event.key == pygame.K_u:
@@ -135,6 +142,10 @@ class GameScreen:
             x, y = event.pos
             if self.menu_button.collidepoint(x, y):
                 self.on_exit()
+            elif self.pause_button.collidepoint(x, y):
+                self.clock.toggle_pause()
+            elif self.speed_button.collidepoint(x, y):
+                self.clock.cycle_speed()
             elif self.upgrade_button.collidepoint(x, y):
                 self.try_upgrade()
             else:
@@ -148,8 +159,12 @@ class GameScreen:
                     self.selected = None
 
     def update(self, dt):
-        if self.result is not None:
-            return
+        for step in self.clock.steps(dt):
+            if self.result is not None:
+                return
+            self.step(step)
+
+    def step(self, dt):
         for hp, speed in self.session.update(dt, len(self.enemies)):
             self.enemies.append(PlaceholderEnemy(self.map.waypoints, hp=hp, speed=speed))
         for enemy in self.enemies:
@@ -208,10 +223,11 @@ class GameScreen:
             t = self.selected.stats
             info = f'Selected: level {self.selected.level+1}/{len(self.selected.levels)}   range {t.range:g}   dmg {t.damage:g}   rate {t.fire_rate:g}/s'
         else:
-            info = 'Click: place / select   U: upgrade   Right-click: deselect   Z: undo   Esc: menu'
+            info = 'Click: place / select   U: upgrade   Z: undo   Space: pause   F: speed   Esc: menu'
             if self.sandbox:
-                info = 'Click: place / select   U: upgrade   Right-click: deselect   Z: undo   N: next wave   Esc: menu'
+                info = 'Click: place / select   U: upgrade   Z: undo   N: next wave   Space: pause   F: speed   Esc: menu'
         ui.text(screen, info, 13, (189, 185, 175), (18, 614))
+        self.draw_controls(screen, mx, my)
         hover = self.menu_button.collidepoint(mx, my)
         ui.rounded(screen, self.menu_button, (78, 82, 92) if hover else (60, 63, 70), 8)
         ui.text(screen, 'Menu', 15, (245, 245, 240), self.menu_button.center, bold=True, anchor='center')
@@ -221,13 +237,38 @@ class GameScreen:
         ui.rounded(screen, self.upgrade_button, fill, 8)
         label = 'Max level' if self.selected is not None and not self.selected.can_upgrade else 'Upgrade (free)'
         ui.text(screen, label, 15, (245, 245, 240) if enabled else (140, 140, 145), self.upgrade_button.center, bold=True, anchor='center')
-        if s.between_waves and self.result is None:
+        if self.result is not None:
+            return
+        preview = s.next_wave()
+        if s.between_waves:
             banner = f'Wave {s.wave+1} starting in {max(1, round(s.break_timer+0.49))}'
+            if preview is not None:
+                banner += f'   ·   {preview.count} enemies, {preview.hp} HP each'
             if self.sandbox:
                 banner += '   ·   N to start now'
             width = ui.text_width(banner, 15, True)+40
             ui.rounded(screen, (480-width/2, 14, width, 34), (30, 50, 104, 225), 17)
             ui.text(screen, banner, 15, ui.WHITE, (480, 31), bold=True, anchor='center')
+        elif preview is not None:
+            label = f'Next: wave {preview.wave}  ·  {preview.count} × {preview.hp} HP'
+            width = ui.text_width(label, 13, True)+28
+            ui.rounded(screen, (MAP_SIZE[0]-width-12, 12, width, 28), (30, 50, 104, 200), 14)
+            ui.text(screen, label, 13, ui.WHITE, (MAP_SIZE[0]-12-width/2, 26), bold=True, anchor='center')
+
+    def draw_controls(self, screen, mx, my):
+        P = ui.px
+        paused = self.clock.paused
+        for rect, active in ((self.pause_button, paused), (self.speed_button, self.clock.speed > 1)):
+            hover = rect.collidepoint(mx, my)
+            fill = (215, 160, 50) if active else ((78, 82, 92) if hover else (60, 63, 70))
+            ui.rounded(screen, rect, fill, 8)
+        cx, cy = self.pause_button.center
+        if paused:
+            pygame.draw.polygon(screen, (245, 245, 240), [(P(cx-6), P(cy-9)), (P(cx-6), P(cy+9)), (P(cx+9), P(cy))])
+        else:
+            for dx in (-6, 2):
+                pygame.draw.rect(screen, (245, 245, 240), ui.scaled((cx+dx, cy-9, 5, 18)))
+        ui.text(screen, f'{self.clock.speed}x', 15, (245, 245, 240), self.speed_button.center, bold=True, anchor='center')
 
     def draw_result(self, screen):
         r = self.result
@@ -257,6 +298,11 @@ class GameScreen:
             over_tower = any(t.contains(mx, my) for t in self.towers)
             if 0 <= mx < MAP_SIZE[0] and 0 <= my < MAP_SIZE[1] and not over_tower:
                 draw_placement(screen, mx, my, self.map.can_place(mx, my, TOWER_RADIUS, self.footprints()))
+        if self.clock.paused and self.result is None:
+            ui.dim(screen, (20, 14, 6, 90))
+            ui.rounded(screen, (380, 250, 200, 76), (30, 50, 104, 235), 16)
+            ui.text(screen, 'Paused', 26, ui.WHITE, (480, 278), bold=True, anchor='center')
+            ui.text(screen, 'Space to resume', 13, (214, 226, 248), (480, 306), anchor='center')
         self.draw_hud(screen, mx, my)
         if self.result is not None:
             self.draw_result(screen)

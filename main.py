@@ -7,6 +7,9 @@ from pathlib import Path
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--smoke', action='store_true', help='Open every screen for a few frames without a window')
+    parser.add_argument('--server', default=os.environ.get('KARZ_SERVER_URL', ''),
+                        help='KARZ server URL, e.g. http://127.0.0.1:8000. Leave empty to save on this computer only.')
+    parser.add_argument('--offline', action='store_true', help='Ignore KARZ_SERVER_URL and save on this computer only')
     args = parser.parse_args()
     if args.smoke:
         os.environ['SDL_VIDEODRIVER'] = 'dummy'
@@ -41,6 +44,13 @@ def main():
                     app.run(frames=3)
                 backend.close()
             print('Smoke test complete: every screen rendered.')
+        elif args.server and not args.offline:
+            from remote_backend import RemoteBackend
+            backend = RemoteBackend(args.server)
+            try:
+                App(backend).run()
+            finally:
+                backend.close()
         else:
             App(LocalBackend()).run()
     finally:

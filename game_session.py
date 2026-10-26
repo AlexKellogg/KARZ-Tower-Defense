@@ -13,6 +13,15 @@ HP_PER_WAVE = 4
 BASE_SPEED = 80
 POINTS_PER_KILL = 10
 POINTS_PER_LIFE_LEFT = 25
+SPEEDS = (1, 2, 3)
+
+
+@dataclass(frozen=True)
+class WavePreview:
+    wave: int
+    count: int
+    hp: int
+    speed: float
 
 
 @dataclass(frozen=True)
@@ -64,9 +73,17 @@ class GameSession:
     def between_waves(self):
         return not self.finished and self.to_spawn == 0 and self.wave == self.waves_cleared
 
-    def enemy_stats(self):
-        hp = round((BASE_HP+HP_PER_WAVE*self.wave)*self.rules.hp_multiplier)
+    def enemy_stats(self, wave=None):
+        wave = self.wave if wave is None else wave
+        hp = round((BASE_HP+HP_PER_WAVE*wave)*self.rules.hp_multiplier)
         return hp, BASE_SPEED*self.rules.speed_multiplier
+
+    def next_wave(self):
+        upcoming = self.wave+1
+        if self.finished or (not self.sandbox and upcoming > TOTAL_WAVES):
+            return None
+        hp, speed = self.enemy_stats(upcoming)
+        return WavePreview(upcoming, wave_size(upcoming), hp, speed)
 
     def update(self, dt, enemies_alive):
         if self.finished:
@@ -121,3 +138,20 @@ class GameSession:
     def result(self):
         return RunResult(self.difficulty, self.status == 'won', self.score, round(self.elapsed, 1),
                          self.leaked, self.waves_cleared, self.kills)
+
+
+class GameClock:
+    def __init__(self):
+        self.paused = False
+        self.speed = SPEEDS[0]
+
+    def toggle_pause(self):
+        self.paused = not self.paused
+
+    def cycle_speed(self):
+        self.speed = SPEEDS[(SPEEDS.index(self.speed)+1) % len(SPEEDS)]
+
+    def steps(self, dt):
+        if self.paused:
+            return []
+        return [dt]*self.speed
