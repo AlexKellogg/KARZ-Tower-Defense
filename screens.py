@@ -2,7 +2,7 @@ import pygame
 
 import ui
 from backend import DIFFICULTY_NAMES, LEADERBOARD_SIZE, AccessDenied, AccountError
-from game_screen import DIFFICULTIES, DIFFICULTY_STYLE, MAP_IMAGE, GameScreen
+from game_screen import DIFFICULTIES, DIFFICULTY_STYLE, GameScreen
 from game_session import format_time
 from ui import Button, Form, TextInput, Toggle
 
@@ -250,9 +250,14 @@ class MapSelectScreen:
         self.back = Button((24, 22, 46, 46), '', 'ghost', 'back')
         self.cards = [pygame.Rect(44+i*224, 168, 200, 280) for i in range(len(DIFFICULTIES))]
         self.unlocked = app.backend.unlocked_difficulties(app.account)
-        self.thumb = ui.load_image(MAP_IMAGE, (176, 106), radius=8)
-        self.locked_thumb = self.thumb.copy()
-        self.locked_thumb.fill((120, 110, 100, 255), special_flags=pygame.BLEND_RGBA_MULT)
+        self.thumbs = {}
+        self.locked_thumbs = {}
+        for difficulty in DIFFICULTIES:
+            thumb = ui.load_image(difficulty['map_image'], (176, 106), radius=8)
+            self.thumbs[difficulty['name']] = thumb
+            locked = thumb.copy()
+            locked.fill((120, 110, 100, 255), special_flags=pygame.BLEND_RGBA_MULT)
+            self.locked_thumbs[difficulty['name']] = locked
         self.hint = ''
 
     def is_open(self, difficulty):
@@ -296,12 +301,13 @@ class MapSelectScreen:
             hover = open_ and rect.collidepoint(mouse)
             r = rect.move(0, -6) if hover else rect
             ui.card(screen, r, 12)
-            ui.blit(screen, self.thumb if open_ else self.locked_thumb, (r.x+12, r.y+12))
+            thumb = self.thumbs[difficulty['name']] if open_ else self.locked_thumbs[difficulty['name']]
+            ui.blit(screen, thumb, (r.x+12, r.y+12))
             if not open_:
                 ui.circle(screen, (r.x+100, r.y+65), 22, (255, 250, 240))
                 ui.icon(screen, 'lock', ui.INK, 22, (r.x+100, r.y+64))
             ui.chip(screen, difficulty['name'].upper(), difficulty['color'] if open_ else (178, 166, 150), (r.x+16, r.y+134))
-            ui.text(screen, 'Desert Highway', 17, ui.NAVY if open_ else (150, 136, 118), (r.x+16, r.y+168), bold=True)
+            ui.text(screen, difficulty['map_name'], 17, ui.NAVY if open_ else (150, 136, 118), (r.x+16, r.y+168), bold=True)
             blurb = difficulty['blurb'] if open_ else f'Beat {DIFFICULTY_NAMES[i-1]} to unlock.'
             for j, line in enumerate(ui.wrap(blurb, 13, 168)):
                 ui.text(screen, line, 13, ui.MUTED, (r.x+16, r.y+196+j*18))

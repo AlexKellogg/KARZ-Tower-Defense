@@ -4,7 +4,7 @@ from backend import RunResult
 
 # Placeholder wave, lives, and scoring values, tune after playtesting.
 STARTING_LIVES = 20
-TOTAL_WAVES = 5
+TOTAL_WAVES = 5  # Legacy Easy-map default; each difficulty now supplies its own clear wave.
 FIRST_WAVE_DELAY = 2.0
 WAVE_BREAK = 3.0
 SPAWN_GAP = 0.8
@@ -20,14 +20,15 @@ class DifficultyRules:
     hp_multiplier: float
     speed_multiplier: float
     score_multiplier: float
+    clear_wave: int
 
 
 # Placeholder difficulty multipliers, tune after playtesting.
 RULES = {
-    'Easy': DifficultyRules(1.0, 1.0, 1.0),
-    'Medium': DifficultyRules(1.4, 1.1, 1.5),
-    'Hard': DifficultyRules(1.9, 1.2, 2.0),
-    'Impossible': DifficultyRules(2.6, 1.35, 3.0),
+    'Easy': DifficultyRules(1.0, 1.0, 1.0, 5),
+    'Medium': DifficultyRules(1.4, 1.1, 1.5, 7),
+    'Hard': DifficultyRules(1.9, 1.2, 2.0, 10),
+    'Impossible': DifficultyRules(2.6, 1.35, 3.0, 10),
 }
 
 
@@ -45,6 +46,7 @@ class GameSession:
         self.difficulty = difficulty
         self.sandbox = sandbox
         self.rules = RULES[difficulty]
+        self.clear_wave = self.rules.clear_wave
         self.lives = STARTING_LIVES
         self.wave = 0
         self.waves_cleared = 0
@@ -83,7 +85,7 @@ class GameSession:
             if self.wave > self.waves_cleared:
                 self.waves_cleared = self.wave
                 self.break_timer = WAVE_BREAK
-                if not self.sandbox and self.waves_cleared == TOTAL_WAVES:
+                if not self.sandbox and self.waves_cleared == self.clear_wave:
                     self.status = 'won'
                     return []
             self.break_timer -= dt

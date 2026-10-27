@@ -1,5 +1,14 @@
 # KARZ TD — Desert highway map starter
 
+## Maps and progression
+
+- **Desert Highway** is the Easy map and clears after wave 5.
+- **Canyon Crossing** is the Medium map and clears after wave 7. It has 49 route tiles and 38 buildable tiles.
+- Hard and Impossible retain temporary Desert Highway placeholders until their dedicated maps are approved.
+
+The selected map supplies its artwork, route, build zones, difficulty rules, and clear wave automatically.
+Sandbox mode continues indefinitely; the same post-clear behavior is intended for a future Freeplay option.
+
 The approved 20 × 12 layout uses 48px tiles (960 × 576px). There are 59 ordered path tiles and 60 buildable tiles. Tower centers remain free to move within buildable areas; placement checks the entire circular footprint and existing towers.
 
 ## Run the preview on Windows
