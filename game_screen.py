@@ -13,7 +13,7 @@ MAP_DIRECTORY = Path(__file__).parent/'maps'
 MAP_PATH = MAP_DIRECTORY/'desert_highway.tmx'
 MAP_IMAGE = MAP_DIRECTORY/'desert_highway.png'
 
-# Placeholder: every difficulty uses the same map for now, change later.
+# Map-specific artwork and logic share the same difficulty selection.
 DIFFICULTY_STYLE = {
     'Easy': ((56, 160, 110), 'Relaxed waves to learn the basics.'),
     'Medium': ((220, 160, 50), 'Tougher enemies, tighter economy.'),
@@ -23,8 +23,8 @@ DIFFICULTY_STYLE = {
 MAPS = {
     'Easy': ('Desert Highway', 'desert_highway'),
     'Medium': ('Canyon Crossing', 'canyon_crossing'),
-    # Replace these placeholders as their dedicated maps are approved.
-    'Hard': ('Desert Highway', 'desert_highway'),
+    'Hard': ('Razorback Pass', 'razorback_pass'),
+    # Replace this placeholder when its dedicated map is approved.
     'Impossible': ('Desert Highway', 'desert_highway'),
 }
 DIFFICULTIES = tuple({
@@ -166,7 +166,8 @@ class GameScreen:
         for enemy in self.enemies:
             enemy.update(dt)
         for tower in self.towers:
-            hit = tower.update(dt, self.enemies)
+            hit = tower.update(dt, self.enemies,
+                               lambda enemy, t=tower: self.map.can_target(t.x, t.y, enemy.pos))
             if hit is not None:
                 muzzle = (tower.x+tower.aim[0]*(TOWER_RADIUS+6), tower.y+tower.aim[1]*(TOWER_RADIUS+6))
                 self.shots.append([muzzle, hit.pos, SHOT_FLASH])
@@ -195,6 +196,8 @@ class GameScreen:
         if self.selected is not None:
             draw_range(screen, self.selected.x, self.selected.y, self.selected.stats.range, (255, 255, 255))
         for enemy in self.enemies:
+            if not self.map.enemy_visible(enemy.pos):
+                continue
             ex, ey = enemy.pos
             pygame.draw.circle(screen, (35, 30, 25), (P(ex+2), P(ey+3)), P(9))
             pygame.draw.circle(screen, (232, 78, 53), (P(ex), P(ey)), P(8))

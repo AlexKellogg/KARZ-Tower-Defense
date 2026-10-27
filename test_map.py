@@ -19,6 +19,16 @@ class PlacementTests(unittest.TestCase):
         self.assertFalse(m.can_place(5, 24, 16))
         self.assertFalse(m.can_place(48, 24, 16, [(50, 24, 16)]))
 
+    def test_blockers_and_tunnels_control_targeting(self):
+        # Top row: buildable, blocker, open. Bottom row: tunnel, path, open.
+        m = GameMap(3, 2, 48, [2, 3, 0, 4, 1, 0], [], None)
+        self.assertFalse(m.has_line_of_sight(24, 24, 120, 24))
+        self.assertTrue(m.has_line_of_sight(24, 72, 120, 72))
+        self.assertFalse(m.can_target(120, 72, (24, 72)))
+        self.assertTrue(m.can_target(120, 72, (72, 72)))
+        self.assertFalse(m.enemy_visible((24, 72)))
+        self.assertTrue(m.enemy_visible((72, 72)))
+
     def test_tmx_matches_approved_layout(self):
         import pygame
         pygame.init()
@@ -59,6 +69,31 @@ class PlacementTests(unittest.TestCase):
                 '...BBBBP.BBB.PPPPPP.', '.......P.....P....P.', '.BPPPPPP.....PBBBBP.',
                 'BBP..........PBBBBP.', '..P.BBB......PBBBBP.', '..PPPPPPPPPPPPBBB.P.',
                 '..............BBB.P.', '..................PE', '....................',
+            ])
+        finally:
+            pygame.quit()
+
+    def test_razorback_pass_matches_approved_layout(self):
+        import pygame
+        pygame.init()
+        pygame.display.set_mode((1, 1))
+        try:
+            path = Path(__file__).parent / 'maps/razorback_pass.tmx'
+            m = load_map(path)
+            layout = json.loads(path.with_suffix('.json').read_text())
+            self.assertEqual(m.roles, layout['tiles'])
+            self.assertEqual(m.waypoints, [(p['x'], p['y']) for p in layout['waypoints']])
+            self.assertEqual((m.width, m.height, m.tile_size), (20, 12, 48))
+            self.assertEqual(m.artwork.get_size(), (960, 576))
+            self.assertEqual((m.roles.count(1), m.roles.count(2), m.roles.count(3), m.roles.count(4)),
+                             (31, 31, 21, 2))
+            self.assertEqual((layout['name'], layout['difficulty'], layout['clearWave']),
+                             ('Razorback Pass', 'Hard', 10))
+            self.assertEqual(layout['rows'], [
+                '........X...........', '.BBB..BBX...........', 'SPPPPPPBX.......XX..',
+                '...XXXPXX.........PE', '...XBBP....BB...BBP.', '...XBBPPPPPPB...BBP.',
+                '...XBB..BBBP.XXXX.P.', '.........BBT.XBBX.P.', '...........T..BBXXP.',
+                '...........PPPPPPPP.', '...........BBB......', '....................',
             ])
         finally:
             pygame.quit()
