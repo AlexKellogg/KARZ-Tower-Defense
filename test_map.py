@@ -38,6 +38,31 @@ class PlacementTests(unittest.TestCase):
         finally:
             pygame.quit()
 
+    def test_canyon_crossing_matches_approved_layout(self):
+        import pygame
+        pygame.init()
+        pygame.display.set_mode((1, 1))
+        try:
+            path = Path(__file__).parent / 'maps/canyon_crossing.tmx'
+            m = load_map(path)
+            layout = json.loads(path.with_suffix('.json').read_text())
+            self.assertEqual(m.roles, layout['tiles'])
+            self.assertEqual(m.waypoints, [(p['x'], p['y']) for p in layout['waypoints']])
+            self.assertEqual((m.width, m.height, m.tile_size), (20, 12, 48))
+            self.assertEqual(m.artwork.get_size(), (960, 576))
+            self.assertEqual(m.roles.count(1), 49)
+            self.assertEqual(m.roles.count(2), 38)
+            self.assertEqual((layout['name'], layout['difficulty'], layout['clearWave']),
+                             ('Canyon Crossing', 'Medium', 7))
+            self.assertEqual(layout['rows'], [
+                '....................', 'SPPPPPPP............', '...BBBBP.BBB........',
+                '...BBBBP.BBB.PPPPPP.', '.......P.....P....P.', '.BPPPPPP.....PBBBBP.',
+                'BBP..........PBBBBP.', '..P.BBB......PBBBBP.', '..PPPPPPPPPPPPBBB.P.',
+                '..............BBB.P.', '..................PE', '....................',
+            ])
+        finally:
+            pygame.quit()
+
 
 if __name__ == '__main__':
     unittest.main()

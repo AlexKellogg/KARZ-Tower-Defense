@@ -5,12 +5,13 @@ import pygame
 import ui
 from backend import DIFFICULTY_NAMES
 from enemy import PlaceholderEnemy
-from game_session import TOTAL_WAVES, GameSession, format_time
+from game_session import GameSession, format_time
 from map_runtime import load_map
 from tower import BASE_TOWER_LEVELS, Tower
 
-MAP_PATH = Path(__file__).parent/'maps'/'desert_highway.tmx'
-MAP_IMAGE = Path(__file__).parent/'maps'/'desert_highway.png'
+MAP_DIRECTORY = Path(__file__).parent/'maps'
+MAP_PATH = MAP_DIRECTORY/'desert_highway.tmx'
+MAP_IMAGE = MAP_DIRECTORY/'desert_highway.png'
 
 # Placeholder: every difficulty uses the same map for now, change later.
 DIFFICULTY_STYLE = {
@@ -19,8 +20,18 @@ DIFFICULTY_STYLE = {
     'Hard': ((226, 108, 64), 'Fast waves that punish weak setups.'),
     'Impossible': ((150, 70, 170), 'Only for perfect strategies.'),
 }
-DIFFICULTIES = tuple({'name': name, 'color': DIFFICULTY_STYLE[name][0], 'blurb': DIFFICULTY_STYLE[name][1]}
-                     for name in DIFFICULTY_NAMES)
+MAPS = {
+    'Easy': ('Desert Highway', 'desert_highway'),
+    'Medium': ('Canyon Crossing', 'canyon_crossing'),
+    # Replace these placeholders as their dedicated maps are approved.
+    'Hard': ('Desert Highway', 'desert_highway'),
+    'Impossible': ('Desert Highway', 'desert_highway'),
+}
+DIFFICULTIES = tuple({
+    'name': name, 'map_name': MAPS[name][0], 'map_path': MAP_DIRECTORY/f'{MAPS[name][1]}.tmx',
+    'map_image': MAP_DIRECTORY/f'{MAPS[name][1]}.png', 'color': DIFFICULTY_STYLE[name][0],
+    'blurb': DIFFICULTY_STYLE[name][1],
+} for name in DIFFICULTY_NAMES)
 
 SHOT_FLASH = 0.08
 TOWER_RADIUS = 16
@@ -76,7 +87,7 @@ class GameScreen:
         self.sandbox = sandbox
         self.on_exit = on_exit
         self.on_finish = on_finish
-        self.map = load_map(MAP_PATH)
+        self.map = load_map(difficulty['map_path'])
         self.art = pygame.transform.smoothscale(self.map.artwork, (ui.px(MAP_SIZE[0]), ui.px(MAP_SIZE[1])))
         self.upgrade_button = pygame.Rect(790, 586, 155, 44)
         self.menu_button = pygame.Rect(676, 586, 104, 44)
@@ -199,7 +210,7 @@ class GameScreen:
         if self.sandbox:
             stats = f'Wave {max(1, s.wave)}   Leaked {s.leaked}   Kills {s.kills}   Money ∞'
         else:
-            stats = f'Wave {max(1, s.wave)}/{TOTAL_WAVES}   Lives {s.lives}   Time {format_time(s.elapsed)}   Kills {s.kills}'
+            stats = f'Wave {max(1, s.wave)}/{s.clear_wave}   Lives {s.lives}   Time {format_time(s.elapsed)}   Kills {s.kills}'
         ui.text(screen, stats, 15, (236, 233, 223), (18, 588), bold=True)
         chip = ui.chip(screen, self.difficulty['name'].upper(), self.difficulty['color'], (30+ui.text_width(stats, 15, True), 587))
         if self.sandbox:
@@ -237,7 +248,7 @@ class GameScreen:
         ui.text(screen, 'Victory!' if r.won else 'Defeat', 32, won_color, (480, 168), bold=True, anchor='center')
         ui.chip(screen, self.difficulty['name'].upper(), self.difficulty['color'], (480, 196), anchor='midtop')
         rows = (('Score', f'{r.score:,}'), ('Time', format_time(r.time_seconds)), ('Lives lost', str(r.lives_lost)),
-                ('Waves survived', f'{r.waves_cleared}/{TOTAL_WAVES}'), ('Kills', str(r.kills)))
+                ('Waves survived', f'{r.waves_cleared}/{self.session.clear_wave}'), ('Kills', str(r.kills)))
         for i, (label, value) in enumerate(rows):
             y = 238+i*28
             ui.text(screen, label, 15, ui.MUTED, (340, y))
