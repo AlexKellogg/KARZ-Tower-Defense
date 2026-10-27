@@ -4,14 +4,26 @@
 
 - **Desert Highway** is the Easy map and clears after wave 5.
 - **Canyon Crossing** is the Medium map and clears after wave 7. It has 49 route tiles and 38 buildable tiles.
-- Hard and Impossible retain temporary Desert Highway placeholders until their dedicated maps are approved.
+- **Razorback Pass** is the Hard map and clears after wave 10. Its 31 build tiles are shaped by
+  21 sight-blocking ridge tiles and a two-tile untargetable tunnel.
+  KARZ disappear while their centers are inside the connected tunnel and reappear at the exit;
+  they continue moving underground. Ridge tiles block tower targeting across them.
+- Impossible retains a temporary Desert Highway placeholder until its dedicated map is approved.
 
 The selected map supplies its artwork, route, build zones, difficulty rules, and clear wave automatically.
 Sandbox mode continues indefinitely; the same post-clear behavior is intended for a future Freeplay option.
 
 The approved 20 × 12 layout uses 48px tiles (960 × 576px). There are 59 ordered path tiles and 60 buildable tiles. Tower centers remain free to move within buildable areas; placement checks the entire circular footprint and existing towers.
 
-## Run the preview on Windows
+## Run the full game on Windows
+
+After installing dependencies as shown below, run `.\.venv\Scripts\python.exe main.py`.
+Sign in, open the difficulty selector, and choose **Hard — Razorback Pass** for the approved
+volcanic map. The card preview and playable map use the same artwork. Beat Medium to unlock
+Hard, or use an existing admin account to test every map. Hard sandbox is also available
+once unlocked. `Launch KARZ.cmd` and `preview.py` launch the older Easy-map preview, not this UI.
+
+## Run the legacy preview on Windows
 
 Map layout and design: **Reagan Moore**.
 
@@ -52,8 +64,8 @@ After creating the Pygame display, call `load_map(path)` from `map_runtime.py`. 
 ## Verify
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s . -p test_map.py
-.\.venv\Scripts\python.exe preview.py --smoke
+.\.venv\Scripts\python.exe -m unittest discover -s . -p "test_*.py"
+.\.venv\Scripts\python.exe main.py --smoke
 ```
 
 Format references: [Tiled TMX documentation](https://doc.mapeditor.org/en/stable/reference/tmx-map-format/) and [pytmx usage](https://github.com/bitcraft/pytmx/blob/master/readme.md).

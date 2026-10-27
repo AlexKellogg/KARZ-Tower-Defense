@@ -13,6 +13,48 @@ class GameMap:
     waypoints: list
     artwork: object
 
+    def role_at(self, x, y):
+        col, row = floor(x/self.tile_size), floor(y/self.tile_size)
+        if 0 <= col < self.width and 0 <= row < self.height:
+            return self.roles[row*self.width+col]
+        return 0
+
+    @staticmethod
+    def _segment_hits_rect(ax, ay, bx, by, left, top, right, bottom):
+        """Liang-Barsky segment/AABB intersection, including boundary contact."""
+        dx, dy = bx-ax, by-ay
+        low, high = 0.0, 1.0
+        for p, q in ((-dx, ax-left), (dx, right-ax), (-dy, ay-top), (dy, bottom-ay)):
+            if p == 0:
+                if q < 0:
+                    return False
+                continue
+            t = q/p
+            if p < 0:
+                low = max(low, t)
+            else:
+                high = min(high, t)
+            if low > high:
+                return False
+        return True
+
+    def has_line_of_sight(self, ax, ay, bx, by):
+        s = self.tile_size
+        for i, role in enumerate(self.roles):
+            if role != 3:
+                continue
+            col, row = i % self.width, i // self.width
+            if self._segment_hits_rect(ax, ay, bx, by, col*s, row*s, (col+1)*s, (row+1)*s):
+                return False
+        return True
+
+    def can_target(self, tower_x, tower_y, enemy_pos):
+        ex, ey = enemy_pos
+        return self.role_at(ex, ey) != 4 and self.has_line_of_sight(tower_x, tower_y, ex, ey)
+
+    def enemy_visible(self, enemy_pos):
+        return self.role_at(*enemy_pos) != 4
+
     def can_place(self, x, y, radius=16, towers=()):
         """Check the entire circular footprint, without snapping the tower center."""
         if not all(isfinite(v) for v in (x, y, radius)) or radius <= 0:
@@ -43,7 +85,7 @@ def load_map(path):
     for row in role_layer.data:
         for gid in row:
             properties = tiled.get_tile_properties_by_gid(gid) or {}
-            roles.append({'path': 1, 'buildable': 2}.get(properties.get('role'), 0))
+            roles.append({'path': 1, 'buildable': 2, 'blocker': 3, 'tunnel': 4}.get(properties.get('role'), 0))
     route = tiled.get_layer_by_name('Enemy route')
     path_obj = next(obj for obj in route if obj.type == 'enemy_path')
     points = [(point.x, point.y) for point in path_obj.points]

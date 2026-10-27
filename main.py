@@ -39,6 +39,11 @@ def main():
                 for screen in (HomeScreen, AdminScreen, MapSelectScreen):
                     app.go(screen(app))
                     app.run(frames=3)
+                for difficulty in DIFFICULTIES[1:]:
+                    app.play(difficulty)
+                    app.run(frames=3)
+                    app.play(difficulty, sandbox=True)
+                    app.run(frames=3)
                 backend.close()
             print('Smoke test complete: every screen rendered.')
         else:
