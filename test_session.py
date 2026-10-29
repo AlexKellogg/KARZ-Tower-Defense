@@ -23,20 +23,20 @@ class SessionTests(unittest.TestCase):
     def test_clearing_every_wave_wins(self):
         s = GameSession('Easy')
         s.update(FIRST_WAVE_DELAY, 0)
-        for wave in range(1, TOTAL_WAVES+1):
+        for wave in range(1, s.clear_wave+1):
             for _ in play_wave(s, 0):
                 s.enemy_killed()
             s.update(0.1, 0)
             self.assertEqual(s.waves_cleared, wave)
-            if wave < TOTAL_WAVES:
+            if wave < s.clear_wave:
                 self.assertTrue(s.between_waves)
                 s.update(WAVE_BREAK, 0)
         self.assertEqual(s.status, 'won')
         result = s.result()
         self.assertTrue(result.won)
         self.assertEqual(result.lives_lost, 0)
-        self.assertEqual(result.waves_cleared, TOTAL_WAVES)
-        kills = sum(wave_size(w) for w in range(1, TOTAL_WAVES+1))
+        self.assertEqual(result.waves_cleared, s.clear_wave)
+        kills = sum(wave_size(w) for w in range(1, s.clear_wave+1))
         self.assertEqual(result.kills, kills)
         self.assertEqual(result.score, kills*POINTS_PER_KILL+STARTING_LIVES*POINTS_PER_LIFE_LEFT)
 
@@ -76,6 +76,12 @@ class SessionTests(unittest.TestCase):
         self.assertGreater(impossible.enemy_stats()[0], easy.enemy_stats()[0])
         self.assertGreater(impossible.enemy_stats()[1], easy.enemy_stats()[1])
         self.assertGreater(impossible.score, easy.score)
+
+    def test_maps_set_their_own_clear_wave(self):
+        self.assertEqual(GameSession('Easy').clear_wave, 5)
+        self.assertEqual(GameSession('Medium').clear_wave, 7)
+        self.assertEqual(GameSession('Hard').clear_wave, 10)
+        self.assertEqual(GameSession('Impossible').clear_wave, 10)
 
     def test_timer_only_runs_while_playing(self):
         s = GameSession('Easy')

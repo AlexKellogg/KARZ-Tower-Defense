@@ -6,7 +6,7 @@ os.environ.setdefault('SDL_AUDIODRIVER', 'dummy')
 
 import pygame
 
-from game_session import FIRST_WAVE_DELAY, SPEEDS, TOTAL_WAVES, GameClock, GameSession, wave_size
+from game_session import FIRST_WAVE_DELAY, SPEEDS, GameClock, GameSession, wave_size
 
 
 class ClockTests(unittest.TestCase):
@@ -58,17 +58,20 @@ class PreviewTests(unittest.TestCase):
         self.assertGreater(easy.next_wave().hp, GameSession('Easy').next_wave().hp)
 
     def test_no_preview_after_the_last_wave_or_when_finished(self):
-        s = GameSession('Easy')
-        s.wave = TOTAL_WAVES
-        self.assertIsNone(s.next_wave())
+        for name in ('Easy', 'Medium', 'Hard'):
+            s = GameSession(name)
+            s.wave = s.clear_wave-1
+            self.assertEqual(s.next_wave().wave, s.clear_wave)
+            s.wave = s.clear_wave
+            self.assertIsNone(s.next_wave())
         s = GameSession('Easy')
         s.status = 'lost'
         self.assertIsNone(s.next_wave())
 
     def test_sandbox_always_has_a_next_wave(self):
         s = GameSession('Easy', sandbox=True)
-        s.wave = TOTAL_WAVES+3
-        self.assertEqual(s.next_wave().wave, TOTAL_WAVES+4)
+        s.wave = s.clear_wave+3
+        self.assertEqual(s.next_wave().wave, s.clear_wave+4)
 
 
 class GameScreenControlTests(unittest.TestCase):

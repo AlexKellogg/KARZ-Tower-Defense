@@ -51,13 +51,14 @@ class Tower:
         ex, ey = enemy.pos
         return hypot(ex-self.x, ey-self.y) <= self.stats.range
 
-    def pick_target(self, enemies):
-        candidates = [e for e in enemies if e.alive and self.in_range(e)]
+    def pick_target(self, enemies, targetable=None):
+        candidates = [e for e in enemies if e.alive and self.in_range(e)
+                      and (targetable is None or targetable(e))]
         return max(candidates, key=lambda e: e.progress, default=None)
 
-    def update(self, dt, enemies):
+    def update(self, dt, enemies, targetable=None):
         self.cooldown = max(0.0, self.cooldown-dt)
-        self.target = self.pick_target(enemies)
+        self.target = self.pick_target(enemies, targetable)
         if self.target is None:
             return None
         ex, ey = self.target.pos

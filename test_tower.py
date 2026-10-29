@@ -47,6 +47,13 @@ class TowerTests(unittest.TestCase):
         dead.take_damage(1)
         self.assertIsNone(t.pick_target([dead]))
 
+    def test_target_filter_can_block_line_of_sight_or_tunnels(self):
+        t = Tower(50, 20)
+        blocked = enemy_at(50)
+        visible = enemy_at(80)
+        self.assertIs(t.pick_target([blocked, visible], lambda enemy: enemy is visible), visible)
+        self.assertIsNone(t.pick_target([blocked], lambda enemy: False))
+
     def test_cooldown_limits_fire_rate(self):
         t = Tower(50, 20)
         e = enemy_at(50, hp=1000)

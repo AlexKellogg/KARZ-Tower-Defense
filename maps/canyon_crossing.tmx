@@ -1,0 +1,67 @@
+<?xml version='1.0' encoding='utf-8'?>
+<map version="1.10" orientation="orthogonal" renderorder="right-down" width="20" height="12" tilewidth="48" tileheight="48" infinite="0" nextlayerid="6" nextobjectid="16">
+  <properties>
+    <property name="name" value="Canyon Crossing" />
+    <property name="difficulty" value="Medium" />
+    <property name="clear_wave" value="7" type="int" />
+    <property name="theme" value="desert-canyon" />
+    <property name="decoration" value="sandstone-crossing-v1" />
+  </properties>
+  <tileset firstgid="1" name="Placement roles" tilewidth="48" tileheight="48" tilecount="2" columns="2">
+    <image source="roles.png" width="96" height="48" />
+    <tile id="0">
+      <properties>
+        <property name="role" value="path" />
+      </properties>
+    </tile>
+    <tile id="1">
+      <properties>
+        <property name="role" value="buildable" />
+      </properties>
+    </tile>
+  </tileset>
+  <imagelayer id="1" name="Artwork" locked="1">
+    <image source="canyon_crossing.png" width="960" height="576" />
+  </imagelayer>
+  <layer id="2" name="Tile roles" width="20" height="12" visible="0" opacity="0.4">
+    <data encoding="csv">0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,2,2,2,2,1,0,2,2,2,0,0,0,0,0,0,0,0,
+0,0,0,2,2,2,2,1,0,2,2,2,0,1,1,1,1,1,1,0,
+0,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0,0,0,1,0,
+0,2,1,1,1,1,1,1,0,0,0,0,0,1,2,2,2,2,1,0,
+2,2,1,0,0,0,0,0,0,0,0,0,0,1,2,2,2,2,1,0,
+0,0,1,0,2,2,2,0,0,0,0,0,0,1,2,2,2,2,1,0,
+0,0,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,0,1,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,2,2,0,1,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0</data>
+  </layer>
+  <objectgroup id="3" name="Buildable zones" visible="0">
+    <object id="1" name="Zone 1" type="buildable" x="144" y="96" width="192" height="48" />
+    <object id="2" name="Zone 2" type="buildable" x="432" y="96" width="144" height="48" />
+    <object id="3" name="Zone 3" type="buildable" x="144" y="144" width="192" height="48" />
+    <object id="4" name="Zone 4" type="buildable" x="432" y="144" width="144" height="48" />
+    <object id="5" name="Zone 5" type="buildable" x="48" y="240" width="48" height="48" />
+    <object id="6" name="Zone 6" type="buildable" x="672" y="240" width="192" height="48" />
+    <object id="7" name="Zone 7" type="buildable" x="0" y="288" width="96" height="48" />
+    <object id="8" name="Zone 8" type="buildable" x="672" y="288" width="192" height="48" />
+    <object id="9" name="Zone 9" type="buildable" x="192" y="336" width="144" height="48" />
+    <object id="10" name="Zone 10" type="buildable" x="672" y="336" width="192" height="48" />
+    <object id="11" name="Zone 11" type="buildable" x="672" y="384" width="144" height="48" />
+    <object id="12" name="Zone 12" type="buildable" x="672" y="432" width="144" height="48" />
+  </objectgroup>
+  <objectgroup id="4" name="Enemy route" visible="0">
+    <object id="13" name="Enemy path" type="enemy_path" x="0" y="0">
+      <polyline points="0,46 403,46 403,226 160,226 160,426 620,426 620,174 886,174 886,473 960,473" />
+    </object>
+  </objectgroup>
+  <objectgroup id="5" name="Entrance and exit" visible="0">
+    <object id="14" name="Entrance" type="entrance" x="0" y="46">
+      <point />
+    </object>
+    <object id="15" name="Exit" type="exit" x="960" y="473">
+      <point />
+    </object>
+  </objectgroup>
+</map>
