@@ -61,6 +61,12 @@ Between waves, the top banner previews the next wave (enemy count and HP). Durin
 
 ## Online accounts (FastAPI server)
 
+**Quickest way on Windows:** double-click **Play KARZ Online.cmd**. The first time, it creates `.venv` and installs everything. After that it opens the server window and the game together, already connected. Close the server window to stop the server.
+
+If Windows Smart App Control is on, it blocks SQLAlchemy's compiled files and the server would crash with *An Application Control policy has blocked this file*. The launcher detects this and installs SQLAlchemy's plain-Python version automatically. To fix it by hand, run `.\.venv\Scripts\python.exe -m pip install --force-reinstall --no-deps <the sqlalchemy-2.1.6-py3-none-any.whl link from the launcher>`.
+
+**Scores while offline:** if the server goes down mid-game, the finished score is saved on your computer (`~/.karz_td/pending_runs.json`) and uploaded automatically the next time you log in, open the level select, or finish another game. Scores the server refuses (for example a level that is locked for that account) are dropped instead of retried forever.
+
 By default the game saves accounts and scores to a SQLite file on your own computer (`local_backend.py`). To share accounts and leaderboards between players and devices, run the server in `server/` and point the game at it. Both use the same `Backend` interface in `backend.py`, so the screens work the same either way.
 
 Install the server requirements (this also installs the game requirements):
@@ -143,7 +149,7 @@ After creating the Pygame display, call `load_map(path)` from `map_runtime.py`. 
 .\.venv\Scripts\python.exe main.py --smoke
 ```
 
-Run every test (needs `server\requirements.txt` installed). `test_server.py` runs the same account, role, unlock and leaderboard tests from `test_backend.py` against the FastAPI server, so both backends must behave identically:
+Every push and pull request runs the full suite automatically on GitHub (`.github/workflows/tests.yml`, Python 3.12 with a PostgreSQL service), so the PostgreSQL tests run there too. To run every test yourself (needs `server\requirements.txt` installed): `test_server.py` runs the same account, role, unlock and leaderboard tests from `test_backend.py` against the FastAPI server, so both backends must behave identically:
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s . -p "test_*.py"
