@@ -4,8 +4,10 @@ import unittest
 from fastapi.testclient import TestClient
 
 import test_backend as contract
-from backend import AccessDenied, Account, AccountError, RunResult
-from remote_backend import OFFLINE, RemoteBackend
+import httpx
+
+from backend import AccessDenied, Account, AccountError, RunResult, ScoreQueued
+from remote_backend import EXPIRED, OFFLINE, QUEUED, RemoteBackend
 from server.app import create_app
 from server.sql_backend import Base, SqlBackend, normalize_url
 
@@ -16,7 +18,7 @@ class ServerFixture:
     def make_backend(self, folder):
         self.sql = SqlBackend(f'sqlite:///{folder/"server.db"}')
         self.http = TestClient(create_app(self.sql))
-        return RemoteBackend('http://testserver', client=self.http)
+        return RemoteBackend('http://testserver', client=self.http, pending_path=folder/'pending.json')
 
     def tearDown(self):
         self.backend.close()
@@ -52,7 +54,7 @@ class PostgresFixture(ServerFixture):
         Base.metadata.drop_all(self.sql.engine)
         Base.metadata.create_all(self.sql.engine)
         self.http = TestClient(create_app(self.sql))
-        return RemoteBackend('http://testserver', client=self.http)
+        return RemoteBackend('http://testserver', client=self.http, pending_path=folder/'pending.json')
 
 
 needs_postgres = unittest.skipUnless(POSTGRES_URL, 'set KARZ_TEST_POSTGRES_URL to run against PostgreSQL')
@@ -161,9 +163,137 @@ class HttpTests(ServerFixture, contract.BackendTestCase):
             self.backend.record_run(self.zlata, contract.run('Hard'))
 
 
+class FlakyClient(TestClient):
+    down = False
+
+    def request(self, *args, **kwargs):
+        if self.down:
+            raise httpx.ConnectError('server is down')
+        return super().request(*args, **kwargs)
+
+
+class QueueTests(ServerFixture, contract.BackendTestCase):
+    def make_backend(self, folder):
+        self.folder = folder
+        self.sql = SqlBackend(f'sqlite:///{folder/"server.db"}')
+        self.http = FlakyClient(create_app(self.sql))
+        return RemoteBackend('http://testserver', client=self.http, pending_path=folder/'pending.json')
+
+    def server_runs(self):
+        return len(self.sql.leaderboard('score', limit=100))
+
+    def win(self, difficulty='Easy', score=500):
+        return contract.run(difficulty, score=score)
+
+    def test_score_finished_while_offline_is_kept_not_lost(self):
+        self.http.down = True
+        with self.assertRaises(ScoreQueued) as caught:
+            self.backend.record_run(self.zlata, self.win())
+        self.assertEqual(str(caught.exception), QUEUED)
+        self.assertEqual(self.backend.pending_runs(self.zlata), [self.win()])
+        self.http.down = False
+        self.assertEqual(self.server_runs(), 0)
+
+    def test_queued_score_uploads_once_when_the_server_is_back(self):
+        self.http.down = True
+        with self.assertRaises(ScoreQueued):
+            self.backend.record_run(self.zlata, self.win())
+        self.http.down = False
+        self.assertEqual(self.backend.unlocked_difficulties(self.zlata), ('Easy', 'Medium'))
+        self.assertEqual(self.backend.pending_runs(self.zlata), [])
+        self.assertEqual([(e.username, e.value) for e in self.backend.leaderboard('score')], [('zlata_k', 500)])
+        self.backend.unlocked_difficulties(self.zlata)
+        self.assertEqual(self.sql.list_accounts(self.sql.promote_by_email('zlata@example.com'))[0].games_played, 1)
+
+    def test_next_game_sends_the_queued_one_first_and_reports_both_unlocks(self):
+        self.http.down = True
+        with self.assertRaises(ScoreQueued):
+            self.backend.record_run(self.zlata, self.win('Easy'))
+        self.http.down = False
+        self.assertEqual(self.backend.record_run(self.zlata, self.win('Medium')), ('Medium', 'Hard'))
+
+    def test_queue_survives_closing_the_game(self):
+        self.http.down = True
+        with self.assertRaises(ScoreQueued):
+            self.backend.record_run(self.zlata, self.win(score=321))
+        self.http.down = False
+        fresh = RemoteBackend('http://testserver', client=self.http, pending_path=self.folder/'pending.json')
+        fresh.log_in('zlata@example.com', 'correct-horse')
+        self.assertEqual([(e.username, e.value) for e in fresh.leaderboard('score')], [('zlata_k', 321)])
+        self.assertEqual(fresh.pending_runs(self.zlata), [])
+
+    def test_two_identical_queued_scores_both_upload(self):
+        self.http.down = True
+        for _ in range(2):
+            with self.assertRaises(ScoreQueued):
+                self.backend.record_run(self.zlata, self.win())
+        self.http.down = False
+        self.backend.unlocked_difficulties(self.zlata)
+        admin = self.sql.promote_by_email('zlata@example.com')
+        self.assertEqual(self.sql.list_accounts(admin)[0].games_played, 2)
+
+    def test_a_queued_score_the_server_refuses_is_dropped_not_stuck(self):
+        self.http.down = True
+        with self.assertRaises(ScoreQueued):
+            self.backend.record_run(self.zlata, self.win('Hard'))
+        self.http.down = False
+        self.assertEqual(self.backend.unlocked_difficulties(self.zlata), ('Easy',))
+        self.assertEqual(self.backend.pending_runs(self.zlata), [])
+        self.assertEqual(self.server_runs(), 0)
+
+    def test_queued_scores_only_upload_for_their_own_account(self):
+        other = self.backend.sign_up('Reagan', 'reagan', 'reagan@example.com', 'password123')
+        self.http.down = True
+        with self.assertRaises(ScoreQueued):
+            self.backend.record_run(self.zlata, self.win(score=111))
+        self.http.down = False
+        self.backend.unlocked_difficulties(other)
+        self.assertEqual(self.server_runs(), 0)
+        self.assertEqual(len(self.backend.pending_runs(self.zlata)), 1)
+
+    def test_server_dropping_again_mid_upload_keeps_the_rest(self):
+        self.http.down = True
+        for score in (1, 2):
+            with self.assertRaises(ScoreQueued):
+                self.backend.record_run(self.zlata, self.win(score=score))
+        self.http.down = False
+        calls = []
+        real = FlakyClient.request
+
+        def drop_after_first(client, *args, **kwargs):
+            if args[0] == 'POST' and args[1] == '/me/runs':
+                calls.append(1)
+                if len(calls) == 2:
+                    raise httpx.ConnectError('dropped')
+            return real(client, *args, **kwargs)
+
+        FlakyClient.request = drop_after_first
+        try:
+            self.backend.unlocked_difficulties(self.zlata)
+        except AccountError:
+            pass
+        finally:
+            FlakyClient.request = real
+        self.assertEqual([r.score for r in self.backend.pending_runs(self.zlata)], [2])
+        self.backend.unlocked_difficulties(self.zlata)
+        self.assertEqual(self.backend.pending_runs(self.zlata), [])
+
+    def test_expired_login_also_keeps_the_score(self):
+        self.backend.tokens[self.zlata.id] = 'expired-token'
+        with self.assertRaises(ScoreQueued) as caught:
+            self.backend.record_run(self.zlata, self.win(score=77))
+        self.assertEqual(str(caught.exception), EXPIRED)
+        self.backend.log_in('zlata@example.com', 'correct-horse')
+        self.assertEqual([(e.username, e.value) for e in self.backend.leaderboard('score')], [('zlata_k', 77)])
+
+
 class OfflineTests(unittest.TestCase):
     def test_unreachable_server_gives_a_friendly_error(self):
-        backend = RemoteBackend('http://127.0.0.1:9', timeout=0.5)
+        import tempfile
+        from pathlib import Path
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        backend = RemoteBackend('http://127.0.0.1:9', timeout=0.5, pending_path=Path(self.tmp.name)/'p.json')
         try:
             with self.assertRaises(AccountError) as caught:
                 backend.log_in('a@example.com', 'password123')

@@ -3,7 +3,7 @@ from pathlib import Path
 import pygame
 
 import ui
-from backend import DIFFICULTY_NAMES
+from backend import DIFFICULTY_NAMES, ScoreQueued
 from enemy import PlaceholderEnemy
 from game_session import GameClock, GameSession, format_time
 from map_runtime import load_map
@@ -106,6 +106,7 @@ class GameScreen:
         self.result = None
         self.unlocked = ()
         self.save_error = ''
+        self.save_note = ''
 
     def footprints(self):
         return [t.footprint for t in self.towers]
@@ -121,6 +122,8 @@ class GameScreen:
             return
         try:
             self.unlocked = tuple(self.on_finish(self.result) or ())
+        except ScoreQueued as e:
+            self.save_note = str(e)
         except Exception as e:
             self.save_error = f'Score not saved: {e}'
 
@@ -299,6 +302,9 @@ class GameScreen:
             ui.text(screen, value, 15, ui.NAVY, (620, y), bold=True, anchor='topright')
         if self.save_error:
             ui.text(screen, self.save_error, 13, ui.ERROR, (480, 390), anchor='center')
+        elif self.save_note:
+            for i, line in enumerate(ui.wrap(self.save_note, 12, 300)):
+                ui.text(screen, line, 12, ui.MUTED, (480, 384+i*15), anchor='center')
         elif self.unlocked:
             ui.rounded(screen, (340, 378, 280, 28), (232, 244, 236), 14)
             ui.text(screen, f'New level unlocked: {", ".join(self.unlocked)}', 13, WIN_COLOR, (480, 392), bold=True, anchor='center')
