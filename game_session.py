@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from backend import RunResult
+from economy import Economy
 
 # Placeholder wave, lives, and scoring values, tune after playtesting.
 STARTING_LIVES = 20
@@ -12,6 +13,7 @@ BASE_HP = 20
 HP_PER_WAVE = 4
 BASE_SPEED = 80
 POINTS_PER_KILL = 10
+MONEY_PER_KILL = 5
 POINTS_PER_LIFE_LEFT = 25
 
 
@@ -46,6 +48,7 @@ class GameSession:
         self.difficulty = difficulty
         self.sandbox = sandbox
         self.rules = RULES[difficulty]
+        self.economy = Economy(sandbox=sandbox)
         self.clear_wave = self.rules.clear_wave
         self.lives = STARTING_LIVES
         self.wave = 0
@@ -98,6 +101,7 @@ class GameSession:
     def enemy_killed(self):
         if not self.finished:
             self.kills += 1
+            self.economy.earn(MONEY_PER_KILL)
 
     def skip_break(self):
         if self.between_waves:
