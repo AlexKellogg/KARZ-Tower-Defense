@@ -27,7 +27,8 @@ class HardMapTests(unittest.TestCase):
         played = []
         app = SimpleNamespace(
             account=SimpleNamespace(is_admin=True),
-            backend=SimpleNamespace(unlocked_difficulties=lambda account: tuple(d['name'] for d in DIFFICULTIES)),
+            backend=SimpleNamespace(unlocked_difficulties=lambda account: tuple(d['name'] for d in DIFFICULTIES),
+                                    load_checkpoint=lambda account, difficulty, mode: None),
             play=lambda difficulty, **kwargs: played.append((difficulty, kwargs)),
         )
         selector = MapSelectScreen(app)

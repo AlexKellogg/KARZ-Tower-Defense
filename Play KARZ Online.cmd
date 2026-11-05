@@ -10,7 +10,7 @@ if not exist ".venv\Scripts\python.exe" (
   pause
   exit /b 1
 )
-".venv\Scripts\python.exe" -c "import fastapi, uvicorn, httpx, pygame, pytmx, sqlalchemy" 2>nul
+".venv\Scripts\python.exe" -c "import fastapi, uvicorn, httpx, pygame, pytmx, sqlalchemy, alembic" 2>nul
 if errorlevel 1 (
   echo Installing game and server packages...
   ".venv\Scripts\python.exe" -m pip install -q -r server\requirements.txt
@@ -20,7 +20,7 @@ if errorlevel 1 (
   echo Windows Smart App Control blocked SQLAlchemy's compiled files. Switching to the plain-Python version...
   ".venv\Scripts\python.exe" -m pip install -q --force-reinstall --no-deps "https://files.pythonhosted.org/packages/c1/69/c75534e336b06b3fd3f76de73d89736510800e60c77c58d4e4ce18389018/sqlalchemy-2.1.6-py3-none-any.whl"
 )
-".venv\Scripts\python.exe" -c "import fastapi, uvicorn, httpx, pygame, pytmx, sqlalchemy, server.app" 2>nul
+".venv\Scripts\python.exe" -c "import fastapi, uvicorn, httpx, pygame, pytmx, sqlalchemy, alembic, server.app" 2>nul
 if errorlevel 1 (
   echo Setup failed. Details:
   ".venv\Scripts\python.exe" -c "import server.app"

@@ -83,11 +83,12 @@ def draw_placement(surface, x, y, ok):
 
 
 class GameScreen:
-    def __init__(self, difficulty, on_exit, on_finish=None, sandbox=False):
+    def __init__(self, difficulty, on_exit, on_finish=None, sandbox=False, on_checkpoint=None, resume=None):
         self.difficulty = difficulty
         self.sandbox = sandbox
         self.on_exit = on_exit
         self.on_finish = on_finish
+        self.on_checkpoint = on_checkpoint
         self.map = load_map(difficulty['map_path'])
         self.art = pygame.transform.smoothscale(self.map.artwork, (ui.px(MAP_SIZE[0]), ui.px(MAP_SIZE[1])))
         self.upgrade_button = pygame.Rect(790, 586, 155, 44)
@@ -96,18 +97,47 @@ class GameScreen:
         self.speed_button = pygame.Rect(620, 586, 50, 44)
         self.levels_button = ui.Button((330, 418, 142, 44), 'Levels', 'secondary')
         self.again_button = ui.Button((488, 418, 142, 44), 'Play again')
-        self.restart()
+        self.restart(resume)
 
-    def restart(self):
+    def restart(self, resume=None):
         self.session = GameSession(self.difficulty['name'], sandbox=self.sandbox)
-        self.clock = GameClock()
         self.towers, self.enemies, self.shots = [], [], []
+        self.resumed = False
+        if resume is not None:
+            try:
+                self.session = GameSession.resume(self.difficulty['name'], resume, sandbox=self.sandbox)
+                self.towers = [self.rebuild_tower(t) for t in resume['towers']]
+                self.resumed = True
+            except (KeyError, TypeError, ValueError):
+                self.session = GameSession(self.difficulty['name'], sandbox=self.sandbox)
+                self.towers = []
+        self.saved_wave = self.session.waves_cleared
+        self.clock = GameClock()
         self.selected = None
         self.show_zones = False
         self.result = None
         self.unlocked = ()
         self.save_error = ''
         self.save_note = ''
+
+    @staticmethod
+    def rebuild_tower(data):
+        tower = Tower(float(data['x']), float(data['y']), TOWER_RADIUS)
+        for _ in range(int(data['level'])):
+            if tower.can_upgrade:
+                tower.upgrade()
+        return tower
+
+    def checkpoint(self):
+        if self.on_checkpoint is None or self.session.waves_cleared == 0 or self.session.finished:
+            return
+        state = {**self.session.snapshot(),
+                 'towers': [{'x': round(t.x, 1), 'y': round(t.y, 1), 'level': t.level} for t in self.towers]}
+        self.saved_wave = self.session.waves_cleared
+        try:
+            self.on_checkpoint(state)
+        except Exception:
+            pass
 
     def footprints(self):
         return [t.footprint for t in self.towers]
@@ -130,6 +160,21 @@ class GameScreen:
             self.save_note = str(e)
         except Exception as e:
             self.save_error = f'Score not saved: {e}'
+        if self.on_checkpoint is not None:
+            try:
+                self.on_checkpoint(None)
+            except Exception:
+                pass
+
+    def leave(self):
+        if self.result is None and self.session.between_waves:
+            self.checkpoint()
+        if self.sandbox and self.result is None and self.on_finish is not None and self.session.waves_cleared > 0:
+            try:
+                self.on_finish(self.session.result())
+            except Exception:
+                pass
+        self.on_exit()
 
     def handle(self, event):
         if self.result is not None:
@@ -140,7 +185,7 @@ class GameScreen:
             return
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                self.on_exit()
+                self.leave()
             elif event.key in (pygame.K_SPACE, pygame.K_p):
                 self.clock.toggle_pause()
             elif event.key == pygame.K_f:
@@ -161,7 +206,7 @@ class GameScreen:
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             x, y = event.pos
             if self.menu_button.collidepoint(x, y):
-                self.on_exit()
+                self.leave()
             elif self.pause_button.collidepoint(x, y):
                 self.clock.toggle_pause()
             elif self.speed_button.collidepoint(x, y):
@@ -188,6 +233,8 @@ class GameScreen:
     def step(self, dt):
         for hp, speed in self.session.update(dt, len(self.enemies)):
             self.enemies.append(PlaceholderEnemy(self.map.waypoints, hp=hp, speed=speed))
+        if self.session.waves_cleared > self.saved_wave:
+            self.checkpoint()
         for enemy in self.enemies:
             enemy.update(dt)
         for tower in self.towers:

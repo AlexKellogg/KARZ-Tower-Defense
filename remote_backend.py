@@ -90,7 +90,25 @@ class RemoteBackend(Backend):
         return entry.get('server') == self.base_url and entry.get('account_id') == account.id
 
     def pending_runs(self, account):
-        return [RunResult(**e['result']) for e in self._load_pending() if self._mine(e, account)]
+        return [RunResult(**e['result']) for e in self._load_pending()
+                if self._mine(e, account) and e.get('kind', 'run') == 'run']
+
+    def pending_checkpoints(self, account):
+        return [e for e in self._load_pending() if self._mine(e, account) and e.get('kind') in ('checkpoint', 'clear')]
+
+    def _queue(self, account, entry):
+        self._save_pending(self._load_pending()+[{'server': self.base_url, 'account_id': account.id, **entry}])
+
+    def _send(self, account, entry):
+        kind = entry.get('kind', 'run')
+        if kind == 'run':
+            return self._call('POST', '/me/runs', account, json=entry['result'])['unlocked']
+        path = f"/me/checkpoints/{entry['difficulty']}/{entry['mode']}"
+        if kind == 'checkpoint':
+            self._call('PUT', path, account, json={'state': entry['state']})
+        else:
+            self._call('DELETE', path, account)
+        return []
 
     def _flush(self, account):
         entries = self._load_pending()
@@ -102,7 +120,7 @@ class RemoteBackend(Backend):
                 keep.append(entry)
                 continue
             try:
-                unlocked += self._call('POST', '/me/runs', account, json=entry['result'])['unlocked']
+                unlocked += self._send(account, entry)
             except (Offline, NotLoggedIn):
                 keep.extend(entries[i:])
                 break
@@ -145,8 +163,8 @@ class RemoteBackend(Backend):
                 {'server': self.base_url, 'account_id': account.id, 'result': asdict(result)}])
             raise ScoreQueued(QUEUED if isinstance(e, Offline) else EXPIRED) from None
 
-    def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE):
-        params = {'limit': limit}
+    def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE, mode='regular'):
+        params = {'limit': limit, 'mode': mode}
         if difficulty is not None:
             params['difficulty'] = difficulty
         return [LeaderboardEntry(**row) for row in self._call('GET', f'/leaderboard/{kind}', params=params)]
@@ -158,3 +176,23 @@ class RemoteBackend(Backend):
 
     def set_role(self, requester, account_id, role):
         return Account(**self._call('PUT', f'/admin/accounts/{account_id}/role', requester, json={'role': role}))
+
+    def _send_or_queue(self, account, entry):
+        if any(self._mine(e, account) for e in self._load_pending()):
+            self._queue(account, entry)
+            self._flush(account)
+            return
+        try:
+            self._send(account, entry)
+        except (Offline, NotLoggedIn):
+            self._queue(account, entry)
+
+    def save_checkpoint(self, account, difficulty, mode, state):
+        self._send_or_queue(account, {'kind': 'checkpoint', 'difficulty': difficulty, 'mode': mode, 'state': state})
+
+    def load_checkpoint(self, account, difficulty, mode):
+        self._flush(account)
+        return self._call('GET', f'/me/checkpoints/{difficulty}/{mode}', account)['state']
+
+    def clear_checkpoint(self, account, difficulty, mode):
+        self._send_or_queue(account, {'kind': 'clear', 'difficulty': difficulty, 'mode': mode})

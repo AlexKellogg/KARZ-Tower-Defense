@@ -1,16 +1,19 @@
 import hashlib
+import json
 import hmac
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, LargeBinary, String, create_engine, func, select
+from sqlalchemy import (Boolean, Float, ForeignKey, Integer, LargeBinary, String, Text, case, create_engine, delete, func,
+                        select)
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.pool import StaticPool
 
-from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, ROLES, AccessDenied, Account,
-                     AccountError, AccountSummary, Backend, LeaderboardEntry, unlocked_for)
+from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, MODES, ROLES, AccessDenied, Account,
+                     AccountError, AccountSummary, Backend, LeaderboardEntry, checkpoint_json, unlocked_for)
 from local_backend import EMAIL_RE, MIN_PASSWORD, _hash
+from server.migrate import upgrade_database
 
 DEFAULT_URL = 'sqlite:///karz_server.db'
 TOKEN_LIFETIME = timedelta(days=30)
@@ -64,6 +67,7 @@ class RunRow(Base):
     waves_cleared: Mapped[int] = mapped_column(Integer)
     kills: Mapped[int] = mapped_column(Integer)
     played_at: Mapped[str] = mapped_column(String(19))
+    mode: Mapped[str] = mapped_column(String(10), default='regular', server_default='regular')
 
 
 class TokenRow(Base):
@@ -73,10 +77,20 @@ class TokenRow(Base):
     created_at: Mapped[str] = mapped_column(String(19))
 
 
+class CheckpointRow(Base):
+    __tablename__ = 'checkpoints'
+    account_id: Mapped[int] = mapped_column(ForeignKey('accounts.id'), primary_key=True)
+    difficulty: Mapped[str] = mapped_column(String(20), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(10), primary_key=True)
+    state: Mapped[str] = mapped_column(Text)
+    saved_at: Mapped[str] = mapped_column(String(19))
+
+
 LEADERBOARD_ORDER = {
     'score': ('score', (('score', True),), False),
     'time': ('time_seconds', (('time_seconds', False),), True),
     'lives': ('lives_lost', (('lives_lost', False), ('time_seconds', False)), True),
+    'waves': ('waves_cleared', (('waves_cleared', True), ('kills', True), ('time_seconds', False)), False),
 }
 
 
@@ -89,7 +103,7 @@ class SqlBackend(Backend):
             if url in ('sqlite://', 'sqlite:///:memory:'):
                 options['poolclass'] = StaticPool
         self.engine = create_engine(url, **options)
-        Base.metadata.create_all(self.engine)
+        upgrade_database(self.engine)
 
     def close(self):
         self.engine.dispose()
@@ -162,7 +176,8 @@ class SqlBackend(Backend):
             return row.to_account()
 
     def _highest_won(self, db, account_id):
-        won = set(db.scalars(select(RunRow.difficulty).where(RunRow.account_id == account_id, RunRow.won.is_(True))))
+        won = set(db.scalars(select(RunRow.difficulty).where(RunRow.account_id == account_id, RunRow.won.is_(True),
+                                                    RunRow.mode == 'regular')))
         return max((i for i, name in enumerate(DIFFICULTY_NAMES) if name in won), default=-1)
 
     def _unlocked(self, db, account_id):
@@ -179,24 +194,27 @@ class SqlBackend(Backend):
             before = self._unlocked(db, account.id)
             if result.difficulty not in before:
                 raise AccessDenied(f'{result.difficulty} is locked for this account.')
-            db.add(RunRow(account_id=account.id, difficulty=result.difficulty, won=bool(result.won),
+            db.add(RunRow(account_id=account.id, difficulty=result.difficulty, won=bool(result.won and not result.sandbox), mode=result.mode,
                           score=int(result.score), time_seconds=float(result.time_seconds),
                           lives_lost=int(result.lives_lost), waves_cleared=int(result.waves_cleared),
                           kills=int(result.kills), played_at=_now()))
             db.commit()
             return tuple(name for name in self._unlocked(db, account.id) if name not in before)
 
-    def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE):
+    def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE, mode='regular'):
         if kind not in LEADERBOARD_KINDS:
             raise ValueError(f'Unknown leaderboard: {kind}')
+        if mode not in MODES:
+            raise ValueError(f'Unknown mode: {mode}')
         value_name, order, only_wins = LEADERBOARD_ORDER[kind]
 
         def ordering(table):
             cols = [table.c[name].desc() if desc else table.c[name].asc() for name, desc in order]
             return cols+[table.c.played_at.asc(), table.c.run_id.asc()]
 
-        runs = select(AccountRow.username, RunRow.score, RunRow.time_seconds, RunRow.lives_lost, RunRow.difficulty,
-                      RunRow.played_at, RunRow.id.label('run_id'), RunRow.account_id).join(
+        runs = select(AccountRow.username, RunRow.score, RunRow.time_seconds, RunRow.lives_lost, RunRow.waves_cleared,
+                      RunRow.kills, RunRow.difficulty, RunRow.played_at, RunRow.id.label('run_id'),
+                      RunRow.account_id).where(RunRow.mode == mode).join(
                           AccountRow, AccountRow.id == RunRow.account_id)
         if only_wins:
             runs = runs.where(RunRow.won.is_(True))
@@ -215,7 +233,7 @@ class SqlBackend(Backend):
         with self._session() as db:
             self._require_admin(db, requester)
             rows = db.execute(
-                select(AccountRow, func.coalesce(func.max(RunRow.score), 0), func.count(RunRow.id))
+                select(AccountRow, func.coalesce(func.max(case((RunRow.mode == 'regular', RunRow.score))), 0), func.count(RunRow.id))
                 .outerjoin(RunRow, RunRow.account_id == AccountRow.id).group_by(AccountRow.id)
                 .order_by((AccountRow.role == 'admin').desc(), AccountRow.username_key)).all()
             return [AccountSummary(row.to_account(), unlocked_for(row.role, self._highest_won(db, row.id)), best, played,
@@ -232,6 +250,26 @@ class SqlBackend(Backend):
             row.role = role
             db.commit()
             return row.to_account()
+
+    def save_checkpoint(self, account, difficulty, mode, state):
+        text = checkpoint_json(difficulty, mode, state)
+        with self._session() as db:
+            if difficulty not in self._unlocked(db, account.id):
+                raise AccessDenied(f'{difficulty} is locked for this account.')
+            db.merge(CheckpointRow(account_id=account.id, difficulty=difficulty, mode=mode, state=text, saved_at=_now()))
+            db.commit()
+
+    def load_checkpoint(self, account, difficulty, mode):
+        with self._session() as db:
+            self._row(db, account.id)
+            row = db.get(CheckpointRow, (account.id, difficulty, mode))
+            return json.loads(row.state) if row else None
+
+    def clear_checkpoint(self, account, difficulty, mode):
+        with self._session() as db:
+            db.execute(delete(CheckpointRow).where(CheckpointRow.account_id == account.id,
+                                                   CheckpointRow.difficulty == difficulty, CheckpointRow.mode == mode))
+            db.commit()
 
     def promote_by_email(self, email):
         with self._session() as db:
