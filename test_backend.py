@@ -14,17 +14,25 @@ def run(difficulty, won=True, score=100, time_seconds=120.0, lives_lost=0):
 class BackendTestCase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.path = Path(self.tmp.name)/'test.db'
-        self.backend = LocalBackend(self.path)
+        self.backend = self.make_backend(Path(self.tmp.name))
         self.zlata = self.backend.sign_up('Zlata', 'zlata_k', 'Zlata@Example.com', 'correct-horse')
 
     def tearDown(self):
         self.backend.close()
         self.tmp.cleanup()
 
+    def make_backend(self, folder):
+        return LocalBackend(folder/'test.db')
+
+    def promote(self, email):
+        return self.backend.promote_by_email(email)
+
+    def password_hashes(self):
+        return [row[0] for row in self.backend.db.execute('SELECT password_hash FROM accounts')]
+
     def make_admin(self):
         self.backend.sign_up('Admin', 'admin', 'admin@example.com', 'password123')
-        return self.backend.promote_by_email('admin@example.com')
+        return self.promote('admin@example.com')
 
 
 class AccountTests(BackendTestCase):
@@ -54,8 +62,9 @@ class AccountTests(BackendTestCase):
                 self.backend.sign_up(*case)
 
     def test_password_is_not_stored_in_plain_text(self):
-        row = self.backend.db.execute('SELECT password_hash FROM accounts').fetchone()
-        self.assertNotIn(b'correct-horse', row[0])
+        hashes = self.password_hashes()
+        self.assertEqual(len(hashes), 1)
+        self.assertNotIn(b'correct-horse', hashes[0])
 
     def test_update_requires_current_password_and_can_change_password(self):
         with self.assertRaises(AccountError):

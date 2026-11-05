@@ -15,6 +15,10 @@ class AccessDenied(PermissionError):
     pass
 
 
+class ScoreQueued(AccountError):
+    pass
+
+
 @dataclass(frozen=True)
 class Account:
     id: int
