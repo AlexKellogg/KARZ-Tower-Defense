@@ -131,6 +131,14 @@ class GameScreen:
         except Exception as e:
             self.save_error = f'Score not saved: {e}'
 
+    def leave(self):
+        if self.sandbox and self.result is None and self.on_finish is not None and self.session.waves_cleared > 0:
+            try:
+                self.on_finish(self.session.result())
+            except Exception:
+                pass
+        self.on_exit()
+
     def handle(self, event):
         if self.result is not None:
             if self.levels_button.clicked(event) or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
@@ -140,7 +148,7 @@ class GameScreen:
             return
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
-                self.on_exit()
+                self.leave()
             elif event.key in (pygame.K_SPACE, pygame.K_p):
                 self.clock.toggle_pause()
             elif event.key == pygame.K_f:
@@ -161,7 +169,7 @@ class GameScreen:
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             x, y = event.pos
             if self.menu_button.collidepoint(x, y):
-                self.on_exit()
+                self.leave()
             elif self.pause_button.collidepoint(x, y):
                 self.clock.toggle_pause()
             elif self.speed_button.collidepoint(x, y):

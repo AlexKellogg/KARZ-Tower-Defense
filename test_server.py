@@ -89,6 +89,15 @@ class PostgresLeaderboardTests(PostgresFixture, contract.LeaderboardTests):
     pass
 
 
+class ServerModeTests(ServerFixture, contract.ModeTests):
+    pass
+
+
+@needs_postgres
+class PostgresModeTests(PostgresFixture, contract.ModeTests):
+    pass
+
+
 class SqlBackendDirectTests(contract.BackendTestCase):
     def make_backend(self, folder):
         return SqlBackend('sqlite://')

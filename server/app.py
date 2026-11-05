@@ -39,6 +39,7 @@ class RunBody(BaseModel):
     lives_lost: int = Field(ge=0)
     waves_cleared: int = Field(ge=0)
     kills: int = Field(ge=0)
+    sandbox: bool = False
 
 
 class RoleBody(BaseModel):
@@ -128,8 +129,9 @@ def create_app(backend=None):
         return {'unlocked': list(backend.record_run(account, RunResult(**body.model_dump())))}
 
     @app.get('/leaderboard/{kind}')
-    def leaderboard(kind: str, difficulty: Optional[str] = None, limit: int = Query(LEADERBOARD_SIZE, ge=1, le=100)):
-        return [asdict(entry) for entry in backend.leaderboard(kind, difficulty, limit)]
+    def leaderboard(kind: str, difficulty: Optional[str] = None, limit: int = Query(LEADERBOARD_SIZE, ge=1, le=100),
+                    mode: str = Query('regular', max_length=10)):
+        return [asdict(entry) for entry in backend.leaderboard(kind, difficulty, limit, mode)]
 
     @app.get('/admin/accounts')
     def list_accounts(account=Depends(current_account)):

@@ -145,8 +145,8 @@ class RemoteBackend(Backend):
                 {'server': self.base_url, 'account_id': account.id, 'result': asdict(result)}])
             raise ScoreQueued(QUEUED if isinstance(e, Offline) else EXPIRED) from None
 
-    def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE):
-        params = {'limit': limit}
+    def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE, mode='regular'):
+        params = {'limit': limit, 'mode': mode}
         if difficulty is not None:
             params['difficulty'] = difficulty
         return [LeaderboardEntry(**row) for row in self._call('GET', f'/leaderboard/{kind}', params=params)]

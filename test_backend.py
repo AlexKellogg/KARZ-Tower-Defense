@@ -174,6 +174,56 @@ class LeaderboardTests(BackendTestCase):
             self.backend.leaderboard('fastest')
 
 
+def sandbox(waves, kills=30, difficulty='Easy', score=300, time_seconds=200.0, won=False):
+    return RunResult(difficulty, won, score, time_seconds, 3, waves, kills, sandbox=True)
+
+
+class ModeTests(BackendTestCase):
+    def test_sandbox_games_are_saved_but_never_unlock_levels(self):
+        self.assertEqual(self.backend.record_run(self.zlata, sandbox(12, won=True)), ())
+        self.assertEqual(self.backend.unlocked_difficulties(self.zlata), ('Easy',))
+
+    def test_sandbox_and_regular_boards_are_separate(self):
+        self.backend.record_run(self.zlata, sandbox(12, score=5000))
+        self.backend.record_run(self.zlata, run('Easy', score=400))
+        self.assertEqual([(e.username, e.value) for e in self.backend.leaderboard('score')], [('zlata_k', 400)])
+        self.assertEqual([(e.username, e.value) for e in self.backend.leaderboard('score', mode='sandbox')],
+                         [('zlata_k', 5000)])
+
+    def test_sandbox_board_ranks_by_most_waves_then_kills(self):
+        reagan = self.backend.sign_up('Reagan', 'reagan', 'reagan@example.com', 'password123')
+        alex = self.backend.sign_up('Alex', 'alex', 'alex@example.com', 'password123')
+        self.backend.record_run(self.zlata, sandbox(8, kills=90))
+        self.backend.record_run(self.zlata, sandbox(15, kills=200))
+        self.backend.record_run(reagan, sandbox(15, kills=250))
+        self.backend.record_run(alex, sandbox(3, kills=20))
+        board = self.backend.leaderboard('waves', mode='sandbox')
+        self.assertEqual([(e.rank, e.username, e.value) for e in board], [(1, 'reagan', 15), (2, 'zlata_k', 15), (3, 'alex', 3)])
+
+    def test_sandbox_needs_the_level_unlocked(self):
+        with self.assertRaises(AccessDenied):
+            self.backend.record_run(self.zlata, sandbox(5, difficulty='Medium'))
+
+    def test_sandbox_difficulty_filter(self):
+        self.backend.record_run(self.zlata, run('Easy'))
+        self.backend.record_run(self.zlata, sandbox(4, difficulty='Medium'))
+        self.backend.record_run(self.zlata, sandbox(9, difficulty='Easy'))
+        self.assertEqual([e.value for e in self.backend.leaderboard('waves', 'Medium', mode='sandbox')], [4])
+
+    def test_admin_best_score_ignores_sandbox(self):
+        admin = self.make_admin()
+        self.backend.record_run(self.zlata, sandbox(30, score=99999))
+        self.backend.record_run(self.zlata, run('Easy', score=500))
+        summary = next(s for s in self.backend.list_accounts(admin) if s.account.id == self.zlata.id)
+        self.assertEqual((summary.best_score, summary.games_played), (500, 2))
+
+    def test_regular_waves_board_and_unknown_mode(self):
+        self.backend.record_run(self.zlata, run('Easy', won=False))
+        self.assertEqual([e.value for e in self.backend.leaderboard('waves')], [2])
+        with self.assertRaises(ValueError):
+            self.backend.leaderboard('waves', mode='hardcore')
+
+
 class MigrationTests(unittest.TestCase):
     def test_old_database_from_the_previous_version_still_works(self):
         with tempfile.TemporaryDirectory() as tmp:

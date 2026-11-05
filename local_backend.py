@@ -6,7 +6,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, ROLES, AccessDenied, Account,
+from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, MODES, ROLES, AccessDenied, Account,
                      AccountError, AccountSummary, Backend, LeaderboardEntry, unlocked_for)
 
 # Local stand-in for the FastAPI backend, swap for the server version once it exists.
@@ -18,6 +18,7 @@ LEADERBOARD_SQL = {
     'score': ('score', 'score DESC', ''),
     'time': ('time_seconds', 'time_seconds ASC', 'AND r.won = 1'),
     'lives': ('lives_lost', 'lives_lost ASC, time_seconds ASC', 'AND r.won = 1'),
+    'waves': ('waves_cleared', 'waves_cleared DESC, kills DESC, time_seconds ASC', ''),
 }
 
 
@@ -57,7 +58,10 @@ class LocalBackend(Backend):
             lives_lost INTEGER NOT NULL,
             waves_cleared INTEGER NOT NULL,
             kills INTEGER NOT NULL,
-            played_at TEXT NOT NULL)''')
+            played_at TEXT NOT NULL,
+            mode TEXT NOT NULL DEFAULT 'regular')''')
+        if 'mode' not in {row[1] for row in self.db.execute('PRAGMA table_info(runs)')}:
+            self.db.execute("ALTER TABLE runs ADD COLUMN mode TEXT NOT NULL DEFAULT 'regular'")
         self.db.commit()
 
     def close(self):
@@ -122,7 +126,7 @@ class LocalBackend(Backend):
         return self._get(account.id)
 
     def _highest_won(self, account_id):
-        won = {row[0] for row in self.db.execute('SELECT DISTINCT difficulty FROM runs WHERE account_id = ? AND won = 1', (account_id,))}
+        won = {row[0] for row in self.db.execute("SELECT DISTINCT difficulty FROM runs WHERE account_id = ? AND won = 1 AND mode = 'regular'", (account_id,))}
         return max((i for i, name in enumerate(DIFFICULTY_NAMES) if name in won), default=-1)
 
     def unlocked_difficulties(self, account):
@@ -135,25 +139,29 @@ class LocalBackend(Backend):
         if result.difficulty not in before:
             raise AccessDenied(f'{result.difficulty} is locked for this account.')
         self.db.execute(
-            '''INSERT INTO runs (account_id, difficulty, won, score, time_seconds, lives_lost, waves_cleared, kills, played_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-            (account.id, result.difficulty, int(result.won), int(result.score), float(result.time_seconds),
-             int(result.lives_lost), int(result.waves_cleared), int(result.kills), _now()))
+            '''INSERT INTO runs (account_id, difficulty, won, score, time_seconds, lives_lost, waves_cleared, kills, played_at, mode)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (account.id, result.difficulty, int(result.won and not result.sandbox), int(result.score),
+             float(result.time_seconds), int(result.lives_lost), int(result.waves_cleared), int(result.kills), _now(),
+             result.mode))
         self.db.commit()
         return tuple(name for name in self.unlocked_difficulties(account) if name not in before)
 
-    def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE):
+    def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE, mode='regular'):
         if kind not in LEADERBOARD_KINDS:
             raise ValueError(f'Unknown leaderboard: {kind}')
+        if mode not in MODES:
+            raise ValueError(f'Unknown mode: {mode}')
         column, order, only_wins = LEADERBOARD_SQL[kind]
-        where, params = '', []
+        where, params = 'AND r.mode = ?', [mode]
         if difficulty is not None:
-            where = 'AND r.difficulty = ?'
+            where += ' AND r.difficulty = ?'
             params.append(difficulty)
         rows = self.db.execute(f'''
             SELECT username, {column}, difficulty, played_at FROM (
                 SELECT a.username AS username, r.score AS score, r.time_seconds AS time_seconds,
-                       r.lives_lost AS lives_lost, r.difficulty AS difficulty, r.played_at AS played_at, r.id AS run_id,
+                       r.lives_lost AS lives_lost, r.waves_cleared AS waves_cleared, r.kills AS kills,
+                       r.difficulty AS difficulty, r.played_at AS played_at, r.id AS run_id,
                        ROW_NUMBER() OVER (PARTITION BY r.account_id ORDER BY {order}, r.played_at, r.id) AS pick
                 FROM runs r JOIN accounts a ON a.id = r.account_id
                 WHERE 1 = 1 {only_wins} {where})
@@ -165,7 +173,8 @@ class LocalBackend(Backend):
     def list_accounts(self, requester):
         self._require_admin(requester)
         rows = self.db.execute('''
-            SELECT a.id, a.name, a.username, a.email, a.role, COALESCE(MAX(r.score), 0), COUNT(r.id), a.created_at
+            SELECT a.id, a.name, a.username, a.email, a.role,
+                   COALESCE(MAX(CASE WHEN r.mode = 'regular' THEN r.score END), 0), COUNT(r.id), a.created_at
             FROM accounts a LEFT JOIN runs r ON r.account_id = a.id
             GROUP BY a.id ORDER BY a.role = 'admin' DESC, a.username COLLATE NOCASE''').fetchall()
         return [AccountSummary(Account(*row[:5]), unlocked_for(row[4], self._highest_won(row[0])), row[5], row[6], row[7] or '')

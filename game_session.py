@@ -143,7 +143,7 @@ class GameSession:
 
     def result(self):
         return RunResult(self.difficulty, self.status == 'won', self.score, round(self.elapsed, 1),
-                         self.leaked, self.waves_cleared, self.kills)
+                         self.leaked, self.waves_cleared, self.kills, sandbox=self.sandbox)
 
 
 class GameClock:

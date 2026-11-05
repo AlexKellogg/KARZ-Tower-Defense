@@ -40,7 +40,7 @@ class App:
         self.go(LoginScreen(self))
 
     def play(self, difficulty, sandbox=False):
-        record = None if sandbox else (lambda result: self.backend.record_run(self.account, result))
+        record = lambda result: self.backend.record_run(self.account, result)
         self.go(GameScreen(difficulty, on_exit=lambda: self.go(MapSelectScreen(self)), on_finish=record, sandbox=sandbox))
 
     def run(self, frames=None):
@@ -327,8 +327,18 @@ class MapSelectScreen:
                 Button((r.x+16, r.y+234, 168, 32), 'Locked', 'disabled').draw(screen, False)
 
 
-BOARD_TABS = (('score', 'Top score'), ('time', 'Best time'), ('lives', 'Fewest lives lost'))
-BOARD_COLUMN = {'score': 'Score', 'time': 'Time', 'lives': 'Lives lost'}
+BOARD_TABS = {
+    'regular': (('score', 'Top score'), ('time', 'Best time'), ('lives', 'Fewest lives lost')),
+    'sandbox': (('waves', 'Most waves'), ('score', 'Top score')),
+}
+BOARD_COLUMN = {'score': 'Score', 'time': 'Time', 'lives': 'Lives lost', 'waves': 'Waves'}
+MODE_TABS = (('regular', 'Regular'), ('sandbox', 'Sandbox'))
+EMPTY_BOARD = {
+    'score': 'No games yet. Play one to get on the board!',
+    'time': 'No wins yet. Beat a level to get on the board!',
+    'lives': 'No wins yet. Beat a level to get on the board!',
+    'waves': 'No sandbox games yet. Clear a wave in sandbox, then leave to get on the board!',
+}
 MEDALS = ((222, 172, 48), (168, 172, 180), (196, 128, 72))
 
 
@@ -336,15 +346,24 @@ class LeaderboardScreen:
     def __init__(self, app):
         self.app = app
         self.back = Button((24, 22, 46, 46), '', 'ghost', 'back')
-        self.tabs = [pygame.Rect(240+i*164, 96, 156, 36) for i in range(len(BOARD_TABS))]
         self.filters = [pygame.Rect(270+i*86, 144, 78, 26) for i in range(len(DIFFICULTY_NAMES)+1)]
-        self.kind, self.difficulty = 'score', None
+        self.modes = [pygame.Rect(776+i*86, 40, 80, 30) for i in range(len(MODE_TABS))]
+        self.mode, self.kind, self.difficulty = 'regular', 'score', None
         self.load()
+
+    @property
+    def board_tabs(self):
+        return BOARD_TABS[self.mode]
+
+    @property
+    def tabs(self):
+        x = 480-(len(self.board_tabs)*164-8)/2
+        return [pygame.Rect(x+i*164, 96, 156, 36) for i in range(len(self.board_tabs))]
 
     def load(self):
         self.error = ''
         try:
-            self.entries = self.app.backend.leaderboard(self.kind, self.difficulty)
+            self.entries = self.app.backend.leaderboard(self.kind, self.difficulty, mode=self.mode)
         except AccountError as e:
             self.entries = []
             self.error = str(e)
@@ -353,7 +372,12 @@ class LeaderboardScreen:
         if self.back.clicked(event) or pressed_escape(event):
             self.app.go(HomeScreen(self.app))
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            for rect, (kind, _) in zip(self.tabs, BOARD_TABS):
+            for rect, (mode, _) in zip(self.modes, MODE_TABS):
+                if rect.collidepoint(event.pos) and mode != self.mode:
+                    self.mode, self.kind = mode, BOARD_TABS[mode][0][0]
+                    self.load()
+                    return
+            for rect, (kind, _) in zip(self.tabs, self.board_tabs):
                 if rect.collidepoint(event.pos):
                     self.kind = kind
                     self.load()
@@ -377,7 +401,12 @@ class LeaderboardScreen:
         self.back.draw(screen)
         ui.text(screen, 'Leaderboard', 30, ui.ON_BG, (480, 58), bold=True, anchor='center')
         mouse = ui.mouse_pos()
-        for rect, (kind, label) in zip(self.tabs, BOARD_TABS):
+        for rect, (mode, label) in zip(self.modes, MODE_TABS):
+            active = mode == self.mode
+            fill = ui.BUTTON if active else (ui.PAPER_HOVER if rect.collidepoint(mouse) else ui.PAPER)
+            ui.rounded(screen, rect, fill, 15, None if active else ui.PAPER_EDGE, 0 if active else 1)
+            ui.text(screen, label, 13, ui.WHITE if active else ui.INK, rect.center, bold=True, anchor='center')
+        for rect, (kind, label) in zip(self.tabs, self.board_tabs):
             active = kind == self.kind
             fill = ui.BUTTON if active else (ui.PAPER_HOVER if rect.collidepoint(mouse) else ui.PAPER)
             ui.rounded(screen, rect, fill, 18, None if active else ui.PAPER_EDGE, 0 if active else 1)
@@ -396,8 +425,7 @@ class LeaderboardScreen:
         if self.error:
             ui.text(screen, self.error, 15, ui.ERROR, (480, 400), anchor='center')
         elif not self.entries:
-            message = 'No games yet. Play one to get on the board!' if self.kind == 'score' else 'No wins yet. Beat a level to get on the board!'
-            ui.text(screen, message, 15, ui.MUTED, (480, 400), anchor='center')
+            ui.text(screen, EMPTY_BOARD[self.kind], 15, ui.MUTED, (480, 400), anchor='center')
         for i, entry in enumerate(self.entries):
             y = 220+i*16.2
             mine = entry.username == self.app.account.username

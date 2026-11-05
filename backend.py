@@ -3,7 +3,8 @@ from dataclasses import dataclass
 
 DIFFICULTY_NAMES = ('Easy', 'Medium', 'Hard', 'Impossible')
 ROLES = ('user', 'admin')
-LEADERBOARD_KINDS = ('score', 'time', 'lives')
+LEADERBOARD_KINDS = ('score', 'time', 'lives', 'waves')
+MODES = ('regular', 'sandbox')
 LEADERBOARD_SIZE = 25
 
 
@@ -41,6 +42,11 @@ class RunResult:
     lives_lost: int
     waves_cleared: int
     kills: int
+    sandbox: bool = False
+
+    @property
+    def mode(self):
+        return 'sandbox' if self.sandbox else 'regular'
 
 
 @dataclass(frozen=True)
@@ -89,8 +95,8 @@ class Backend(ABC):
         """Saves a finished game. Returns the names of difficulties newly unlocked by it. Raises AccessDenied."""
 
     @abstractmethod
-    def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE):
-        """kind is 'score', 'time', or 'lives'. One entry per player (their best). Returns list of LeaderboardEntry."""
+    def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE, mode='regular'):
+        """kind is 'score', 'time', 'lives' or 'waves'; mode is 'regular' or 'sandbox'. One entry per player (their best)."""
 
     @abstractmethod
     def list_accounts(self, requester):
