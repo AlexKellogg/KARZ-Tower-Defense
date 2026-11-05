@@ -107,6 +107,18 @@ uvicorn server.app:create_app --factory --host 0.0.0.0 --port $PORT
 
 Players then launch with `--server https://your-app-url`.
 
+### Database changes (migrations)
+
+The server builds and updates its database with [Alembic](https://alembic.sqlalchemy.org/) migrations in `server/migrations/versions/`. Every time the server starts, it applies any migrations the database doesn't have yet, so existing accounts and scores are kept. Databases created before migrations existed are recognized and upgraded automatically.
+
+To change the database: edit the models in `server/sql_backend.py`, then generate a migration and commit it with your change:
+
+```powershell
+.\.venv\Scripts\python.exe -c "from alembic import command; from server.migrate import alembic_config; command.revision(alembic_config(), message='describe the change', autogenerate=True)"
+```
+
+Read the generated file before committing. `test_migrations.py` fails if the models and the migrations ever disagree.
+
 ### API
 
 | Method | Path | Auth | Purpose |

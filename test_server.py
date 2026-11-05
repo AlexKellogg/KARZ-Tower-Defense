@@ -9,7 +9,9 @@ import httpx
 from backend import AccessDenied, Account, AccountError, RunResult, ScoreQueued
 from remote_backend import EXPIRED, OFFLINE, QUEUED, RemoteBackend
 from server.app import create_app
-from server.sql_backend import Base, SqlBackend, normalize_url
+from sqlalchemy import create_engine
+
+from server.sql_backend import SqlBackend, normalize_url
 
 POSTGRES_URL = os.environ.get('KARZ_TEST_POSTGRES_URL', '')
 
@@ -48,11 +50,18 @@ class ServerLeaderboardTests(ServerFixture, contract.LeaderboardTests):
     pass
 
 
+def reset_postgres():
+    engine = create_engine(normalize_url(POSTGRES_URL))
+    with engine.begin() as connection:
+        connection.exec_driver_sql('DROP SCHEMA public CASCADE')
+        connection.exec_driver_sql('CREATE SCHEMA public')
+    engine.dispose()
+
+
 class PostgresFixture(ServerFixture):
     def make_backend(self, folder):
+        reset_postgres()
         self.sql = SqlBackend(POSTGRES_URL)
-        Base.metadata.drop_all(self.sql.engine)
-        Base.metadata.create_all(self.sql.engine)
         self.http = TestClient(create_app(self.sql))
         return RemoteBackend('http://testserver', client=self.http, pending_path=folder/'pending.json')
 

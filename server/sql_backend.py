@@ -11,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, ROLES, AccessDenied, Account,
                      AccountError, AccountSummary, Backend, LeaderboardEntry, unlocked_for)
 from local_backend import EMAIL_RE, MIN_PASSWORD, _hash
+from server.migrate import upgrade_database
 
 DEFAULT_URL = 'sqlite:///karz_server.db'
 TOKEN_LIFETIME = timedelta(days=30)
@@ -89,7 +90,7 @@ class SqlBackend(Backend):
             if url in ('sqlite://', 'sqlite:///:memory:'):
                 options['poolclass'] = StaticPool
         self.engine = create_engine(url, **options)
-        Base.metadata.create_all(self.engine)
+        upgrade_database(self.engine)
 
     def close(self):
         self.engine.dispose()
