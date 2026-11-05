@@ -1,15 +1,17 @@
 import hashlib
+import json
 import hmac
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, LargeBinary, String, case, create_engine, func, select
+from sqlalchemy import (Boolean, Float, ForeignKey, Integer, LargeBinary, String, Text, case, create_engine, delete, func,
+                        select)
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.pool import StaticPool
 
 from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, MODES, ROLES, AccessDenied, Account,
-                     AccountError, AccountSummary, Backend, LeaderboardEntry, unlocked_for)
+                     AccountError, AccountSummary, Backend, LeaderboardEntry, checkpoint_json, unlocked_for)
 from local_backend import EMAIL_RE, MIN_PASSWORD, _hash
 from server.migrate import upgrade_database
 
@@ -73,6 +75,15 @@ class TokenRow(Base):
     token_key: Mapped[str] = mapped_column(String(64), primary_key=True)
     account_id: Mapped[int] = mapped_column(ForeignKey('accounts.id'), index=True)
     created_at: Mapped[str] = mapped_column(String(19))
+
+
+class CheckpointRow(Base):
+    __tablename__ = 'checkpoints'
+    account_id: Mapped[int] = mapped_column(ForeignKey('accounts.id'), primary_key=True)
+    difficulty: Mapped[str] = mapped_column(String(20), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(10), primary_key=True)
+    state: Mapped[str] = mapped_column(Text)
+    saved_at: Mapped[str] = mapped_column(String(19))
 
 
 LEADERBOARD_ORDER = {
@@ -239,6 +250,26 @@ class SqlBackend(Backend):
             row.role = role
             db.commit()
             return row.to_account()
+
+    def save_checkpoint(self, account, difficulty, mode, state):
+        text = checkpoint_json(difficulty, mode, state)
+        with self._session() as db:
+            if difficulty not in self._unlocked(db, account.id):
+                raise AccessDenied(f'{difficulty} is locked for this account.')
+            db.merge(CheckpointRow(account_id=account.id, difficulty=difficulty, mode=mode, state=text, saved_at=_now()))
+            db.commit()
+
+    def load_checkpoint(self, account, difficulty, mode):
+        with self._session() as db:
+            self._row(db, account.id)
+            row = db.get(CheckpointRow, (account.id, difficulty, mode))
+            return json.loads(row.state) if row else None
+
+    def clear_checkpoint(self, account, difficulty, mode):
+        with self._session() as db:
+            db.execute(delete(CheckpointRow).where(CheckpointRow.account_id == account.id,
+                                                   CheckpointRow.difficulty == difficulty, CheckpointRow.mode == mode))
+            db.commit()
 
     def promote_by_email(self, email):
         with self._session() as db:

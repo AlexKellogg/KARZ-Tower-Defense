@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from backend import RunResult
+from backend import CHECKPOINT_VERSION, RunResult
 from economy import Economy
 
 # Placeholder wave, lives, and scoring values, tune after playtesting.
@@ -69,6 +69,26 @@ class GameSession:
         self.kills = 0
         self.leaked = 0
         self.status = 'playing'
+
+    @classmethod
+    def resume(cls, difficulty, state, sandbox=False):
+        session = cls(difficulty, sandbox=sandbox)
+        wave = int(state['wave'])
+        if state.get('version') != CHECKPOINT_VERSION or wave < 1 or (not sandbox and wave >= session.clear_wave):
+            raise ValueError('This saved game cannot be resumed.')
+        session.wave = session.waves_cleared = wave
+        session.lives = int(state['lives'])
+        session.kills = int(state['kills'])
+        session.leaked = int(state['leaked'])
+        session.elapsed = float(state['elapsed'])
+        if not sandbox:
+            session.economy.money = int(state['money'])
+        session.break_timer = WAVE_BREAK
+        return session
+
+    def snapshot(self):
+        return {'version': CHECKPOINT_VERSION, 'wave': self.waves_cleared, 'lives': self.lives, 'kills': self.kills,
+                'leaked': self.leaked, 'money': self.economy.money, 'elapsed': round(self.elapsed, 2)}
 
     @property
     def finished(self):

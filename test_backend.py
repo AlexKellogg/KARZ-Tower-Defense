@@ -224,6 +224,64 @@ class ModeTests(BackendTestCase):
             self.backend.leaderboard('waves', mode='hardcore')
 
 
+def state(wave=3, money=210, towers=None, **extra):
+    data = {'version': 1, 'wave': wave, 'lives': 18, 'kills': 40, 'leaked': 2, 'money': money, 'elapsed': 95.5,
+            'towers': towers if towers is not None else [{'x': 150, 'y': 250, 'level': 2}, {'x': 230.5, 'y': 180, 'level': 0}]}
+    data.update(extra)
+    return data
+
+
+class CheckpointTests(BackendTestCase):
+    def test_nothing_saved_yet(self):
+        self.assertIsNone(self.backend.load_checkpoint(self.zlata, 'Easy', 'regular'))
+
+    def test_save_and_load_round_trip(self):
+        self.backend.save_checkpoint(self.zlata, 'Easy', 'regular', state())
+        self.assertEqual(self.backend.load_checkpoint(self.zlata, 'Easy', 'regular'), state())
+
+    def test_newer_checkpoint_replaces_the_old_one(self):
+        self.backend.save_checkpoint(self.zlata, 'Easy', 'regular', state(wave=2))
+        self.backend.save_checkpoint(self.zlata, 'Easy', 'regular', state(wave=4))
+        self.assertEqual(self.backend.load_checkpoint(self.zlata, 'Easy', 'regular')['wave'], 4)
+
+    def test_each_level_and_mode_has_its_own_checkpoint(self):
+        self.backend.record_run(self.zlata, run('Easy'))
+        self.backend.save_checkpoint(self.zlata, 'Easy', 'regular', state(wave=2))
+        self.backend.save_checkpoint(self.zlata, 'Easy', 'sandbox', state(wave=9))
+        self.backend.save_checkpoint(self.zlata, 'Medium', 'regular', state(wave=1))
+        self.assertEqual([self.backend.load_checkpoint(self.zlata, d, m)['wave'] for d, m in
+                          (('Easy', 'regular'), ('Easy', 'sandbox'), ('Medium', 'regular'))], [2, 9, 1])
+
+    def test_clear_removes_only_that_checkpoint(self):
+        self.backend.save_checkpoint(self.zlata, 'Easy', 'regular', state())
+        self.backend.save_checkpoint(self.zlata, 'Easy', 'sandbox', state())
+        self.backend.clear_checkpoint(self.zlata, 'Easy', 'regular')
+        self.backend.clear_checkpoint(self.zlata, 'Easy', 'regular')
+        self.assertIsNone(self.backend.load_checkpoint(self.zlata, 'Easy', 'regular'))
+        self.assertIsNotNone(self.backend.load_checkpoint(self.zlata, 'Easy', 'sandbox'))
+
+    def test_players_only_see_their_own_checkpoints(self):
+        reagan = self.backend.sign_up('Reagan', 'reagan', 'reagan@example.com', 'password123')
+        self.backend.save_checkpoint(self.zlata, 'Easy', 'regular', state(wave=5))
+        self.assertIsNone(self.backend.load_checkpoint(reagan, 'Easy', 'regular'))
+
+    def test_cannot_save_on_a_locked_level(self):
+        with self.assertRaises(AccessDenied):
+            self.backend.save_checkpoint(self.zlata, 'Hard', 'regular', state())
+
+    def test_invalid_checkpoints_are_refused(self):
+        bad = [state(version=99), state(wave=0), state(money=-5), state(lives='lots'), state(towers='none'),
+               state(towers=[{'x': 5000, 'y': 1, 'level': 0}]), state(towers=[{'x': 1, 'y': 1}]),
+               state(towers=[{'x': 1, 'y': 1, 'level': 0}]*301), {'wave': 3}, ['not', 'a', 'dict']]
+        for case in bad:
+            with self.subTest(case=str(case)[:60]), self.assertRaises(AccountError):
+                self.backend.save_checkpoint(self.zlata, 'Easy', 'regular', case)
+        for difficulty, mode in (('Nightmare', 'regular'), ('Easy', 'hardcore')):
+            with self.assertRaises(AccountError):
+                self.backend.save_checkpoint(self.zlata, difficulty, mode, state())
+        self.assertIsNone(self.backend.load_checkpoint(self.zlata, 'Easy', 'regular'))
+
+
 class MigrationTests(unittest.TestCase):
     def test_old_database_from_the_previous_version_still_works(self):
         with tempfile.TemporaryDirectory() as tmp:

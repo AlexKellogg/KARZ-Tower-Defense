@@ -6,8 +6,10 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+import json
+
 from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, MODES, ROLES, AccessDenied, Account,
-                     AccountError, AccountSummary, Backend, LeaderboardEntry, unlocked_for)
+                     AccountError, AccountSummary, Backend, LeaderboardEntry, checkpoint_json, unlocked_for)
 
 # Local stand-in for the FastAPI backend, swap for the server version once it exists.
 DEFAULT_DB = Path.home()/'.karz_td'/'accounts.db'
@@ -62,6 +64,13 @@ class LocalBackend(Backend):
             mode TEXT NOT NULL DEFAULT 'regular')''')
         if 'mode' not in {row[1] for row in self.db.execute('PRAGMA table_info(runs)')}:
             self.db.execute("ALTER TABLE runs ADD COLUMN mode TEXT NOT NULL DEFAULT 'regular'")
+        self.db.execute('''CREATE TABLE IF NOT EXISTS checkpoints (
+            account_id INTEGER NOT NULL REFERENCES accounts(id),
+            difficulty TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            state TEXT NOT NULL,
+            saved_at TEXT NOT NULL,
+            PRIMARY KEY (account_id, difficulty, mode))''')
         self.db.commit()
 
     def close(self):
@@ -190,6 +199,25 @@ class LocalBackend(Backend):
         self.db.execute('UPDATE accounts SET role = ? WHERE id = ?', (role, account_id))
         self.db.commit()
         return self._get(account_id)
+
+    def save_checkpoint(self, account, difficulty, mode, state):
+        text = checkpoint_json(difficulty, mode, state)
+        if difficulty not in self.unlocked_difficulties(account):
+            raise AccessDenied(f'{difficulty} is locked for this account.')
+        self.db.execute('INSERT OR REPLACE INTO checkpoints (account_id, difficulty, mode, state, saved_at) VALUES (?, ?, ?, ?, ?)',
+                        (account.id, difficulty, mode, text, _now()))
+        self.db.commit()
+
+    def load_checkpoint(self, account, difficulty, mode):
+        self._get(account.id)
+        row = self.db.execute('SELECT state FROM checkpoints WHERE account_id = ? AND difficulty = ? AND mode = ?',
+                              (account.id, difficulty, mode)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def clear_checkpoint(self, account, difficulty, mode):
+        self.db.execute('DELETE FROM checkpoints WHERE account_id = ? AND difficulty = ? AND mode = ?',
+                        (account.id, difficulty, mode))
+        self.db.commit()
 
     def promote_by_email(self, email):
         row = self.db.execute('SELECT id FROM accounts WHERE email = ?', (email.strip().lower(),)).fetchone()

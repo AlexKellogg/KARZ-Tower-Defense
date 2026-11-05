@@ -42,6 +42,10 @@ class RunBody(BaseModel):
     sandbox: bool = False
 
 
+class CheckpointBody(BaseModel):
+    state: dict
+
+
 class RoleBody(BaseModel):
     role: str = Field(max_length=10)
 
@@ -132,6 +136,20 @@ def create_app(backend=None):
     def leaderboard(kind: str, difficulty: Optional[str] = None, limit: int = Query(LEADERBOARD_SIZE, ge=1, le=100),
                     mode: str = Query('regular', max_length=10)):
         return [asdict(entry) for entry in backend.leaderboard(kind, difficulty, limit, mode)]
+
+    @app.get('/me/checkpoints/{difficulty}/{mode}')
+    def load_checkpoint(difficulty: str, mode: str, account=Depends(current_account)):
+        return {'state': backend.load_checkpoint(account, difficulty, mode)}
+
+    @app.put('/me/checkpoints/{difficulty}/{mode}')
+    def save_checkpoint(difficulty: str, mode: str, body: CheckpointBody, account=Depends(current_account)):
+        backend.save_checkpoint(account, difficulty, mode, body.state)
+        return {'status': 'ok'}
+
+    @app.delete('/me/checkpoints/{difficulty}/{mode}')
+    def clear_checkpoint(difficulty: str, mode: str, account=Depends(current_account)):
+        backend.clear_checkpoint(account, difficulty, mode)
+        return {'status': 'ok'}
 
     @app.get('/admin/accounts')
     def list_accounts(account=Depends(current_account)):

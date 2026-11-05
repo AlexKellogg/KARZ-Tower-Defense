@@ -98,6 +98,15 @@ class PostgresModeTests(PostgresFixture, contract.ModeTests):
     pass
 
 
+class ServerCheckpointTests(ServerFixture, contract.CheckpointTests):
+    pass
+
+
+@needs_postgres
+class PostgresCheckpointTests(PostgresFixture, contract.CheckpointTests):
+    pass
+
+
 class SqlBackendDirectTests(contract.BackendTestCase):
     def make_backend(self, folder):
         return SqlBackend('sqlite://')
@@ -190,7 +199,7 @@ class FlakyClient(TestClient):
         return super().request(*args, **kwargs)
 
 
-class QueueTests(ServerFixture, contract.BackendTestCase):
+class QueueFixture(ServerFixture):
     def make_backend(self, folder):
         self.folder = folder
         self.sql = SqlBackend(f'sqlite:///{folder/"server.db"}')
@@ -203,6 +212,8 @@ class QueueTests(ServerFixture, contract.BackendTestCase):
     def win(self, difficulty='Easy', score=500):
         return contract.run(difficulty, score=score)
 
+
+class QueueTests(QueueFixture, contract.BackendTestCase):
     def test_score_finished_while_offline_is_kept_not_lost(self):
         self.http.down = True
         with self.assertRaises(ScoreQueued) as caught:
@@ -303,6 +314,60 @@ class QueueTests(ServerFixture, contract.BackendTestCase):
         self.assertEqual(str(caught.exception), EXPIRED)
         self.backend.log_in('zlata@example.com', 'correct-horse')
         self.assertEqual([(e.username, e.value) for e in self.backend.leaderboard('score')], [('zlata_k', 77)])
+
+
+class CheckpointQueueTests(QueueFixture, contract.BackendTestCase):
+    def test_checkpoint_saved_while_offline_reaches_the_server_later(self):
+        self.http.down = True
+        self.backend.save_checkpoint(self.zlata, 'Easy', 'regular', contract.state(wave=3))
+        self.assertEqual(len(self.backend.pending_checkpoints(self.zlata)), 1)
+        self.http.down = False
+        self.assertEqual(self.backend.load_checkpoint(self.zlata, 'Easy', 'regular')['wave'], 3)
+        self.assertEqual(self.backend.pending_checkpoints(self.zlata), [])
+
+    def test_offline_save_then_finish_ends_with_no_checkpoint_and_the_score_kept(self):
+        self.http.down = True
+        self.backend.save_checkpoint(self.zlata, 'Easy', 'regular', contract.state(wave=4))
+        with self.assertRaises(ScoreQueued):
+            self.backend.record_run(self.zlata, self.win(score=650))
+        self.backend.clear_checkpoint(self.zlata, 'Easy', 'regular')
+        self.http.down = False
+        self.assertIsNone(self.backend.load_checkpoint(self.zlata, 'Easy', 'regular'))
+        self.assertEqual([(e.username, e.value) for e in self.backend.leaderboard('score')], [('zlata_k', 650)])
+
+    def test_later_checkpoint_waits_behind_an_earlier_queued_one(self):
+        self.http.down = True
+        self.backend.save_checkpoint(self.zlata, 'Easy', 'regular', contract.state(wave=2))
+        self.http.down = False
+        calls = []
+        real = FlakyClient.request
+
+        def count(client, *args, **kwargs):
+            if args[0] == 'PUT':
+                calls.append(kwargs['json']['state']['wave'])
+            return real(client, *args, **kwargs)
+
+        FlakyClient.request = count
+        try:
+            self.backend.save_checkpoint(self.zlata, 'Easy', 'regular', contract.state(wave=3))
+        finally:
+            FlakyClient.request = real
+        self.assertEqual(calls, [2, 3])
+        self.assertEqual(self.backend.load_checkpoint(self.zlata, 'Easy', 'regular')['wave'], 3)
+
+    def test_old_queue_files_without_a_kind_still_upload_as_scores(self):
+        import json
+        (self.folder/'pending.json').write_text(json.dumps([{'server': 'http://testserver', 'account_id': self.zlata.id,
+                                                             'result': {'difficulty': 'Easy', 'won': True, 'score': 42,
+                                                                        'time_seconds': 9.0, 'lives_lost': 0,
+                                                                        'waves_cleared': 5, 'kills': 3}}]))
+        self.backend.unlocked_difficulties(self.zlata)
+        self.assertEqual([e.value for e in self.backend.leaderboard('score')], [42])
+
+    def test_checkpoint_endpoints_need_a_login(self):
+        for method in ('GET', 'PUT', 'DELETE'):
+            response = self.http.request(method, '/me/checkpoints/Easy/regular', json={'state': contract.state()})
+            self.assertEqual(response.status_code, 401)
 
 
 class OfflineTests(unittest.TestCase):

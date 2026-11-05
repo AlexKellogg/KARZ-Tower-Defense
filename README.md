@@ -65,7 +65,11 @@ Between waves, the top banner previews the next wave (enemy count and HP). Durin
 
 If Windows Smart App Control is on, it blocks SQLAlchemy's compiled files and the server would crash with *An Application Control policy has blocked this file*. The launcher detects this and installs SQLAlchemy's plain-Python version automatically. To fix it by hand, run `.\.venv\Scripts\python.exe -m pip install --force-reinstall --no-deps <the sqlalchemy-2.1.6-py3-none-any.whl link from the launcher>`.
 
-**Scores while offline:** if the server goes down mid-game, the finished score is saved on your computer (`~/.karz_td/pending_runs.json`) and uploaded automatically the next time you log in, open the level select, or finish another game. Scores the server refuses (for example a level that is locked for that account) are dropped instead of retried forever.
+**Saving progress:** the game saves a checkpoint (wave, lives, money, kills, time and every tower) after each cleared wave, and again if you leave between waves. Next time you press Play or Sandbox on that level, it asks whether to continue from the next wave or start a new game. Leaving in the middle of a wave means you replay that wave. Winning or losing removes the checkpoint. Regular and sandbox games are saved separately.
+
+**Sandbox leaderboards:** sandbox games are saved when you leave after clearing at least one wave. They have their own boards (Most waves, Top score) under the Sandbox switch on the leaderboard screen, and never unlock levels or count toward an account's best score.
+
+**Scores while offline:** if the server goes down mid-game, the finished score (and any checkpoint) is saved on your computer (`~/.karz_td/pending_runs.json`) and uploaded automatically the next time you log in, open the level select, or finish another game. Scores the server refuses (for example a level that is locked for that account) are dropped instead of retried forever.
 
 By default the game saves accounts and scores to a SQLite file on your own computer (`local_backend.py`). To share accounts and leaderboards between players and devices, run the server in `server/` and point the game at it. Both use the same `Backend` interface in `backend.py`, so the screens work the same either way.
 
@@ -130,9 +134,10 @@ Read the generated file before committing. `test_migrations.py` fails if the mod
 | GET / PUT | `/me` | token | Read or update your account |
 | GET | `/me/unlocked` | token | Difficulties you can play |
 | POST | `/me/runs` | token | Save a finished game, returns new unlocks |
-| GET | `/leaderboard/{score,time,lives}` | none | Top players, optional `?difficulty=` |
+| GET | `/leaderboard/{score,time,lives,waves}` | none | Top players, optional `?difficulty=` and `?mode=regular\|sandbox` |
 | GET | `/admin/accounts` | admin token | All accounts |
 | PUT | `/admin/accounts/{id}/role` | admin token | Change a role |
+| GET / PUT / DELETE | `/me/checkpoints/{difficulty}/{regular\|sandbox}` | token | Read, save or remove the game saved after the last cleared wave |
 
 Passwords are hashed with PBKDF2 and a per-account salt. Tokens are random, stored only as SHA-256 hashes, and expire after 30 days. Roles are always checked against the database, never trusted from the client.
 

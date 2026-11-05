@@ -1,7 +1,7 @@
 import pygame
 
 import ui
-from backend import DIFFICULTY_NAMES, LEADERBOARD_SIZE, AccessDenied, AccountError
+from backend import CHECKPOINT_VERSION, DIFFICULTY_NAMES, LEADERBOARD_SIZE, AccessDenied, AccountError
 from game_screen import DIFFICULTIES, DIFFICULTY_STYLE, GameScreen
 from game_session import format_time
 from ui import Button, Form, TextInput, Toggle
@@ -39,9 +39,20 @@ class App:
         self.account = None
         self.go(LoginScreen(self))
 
-    def play(self, difficulty, sandbox=False):
-        record = lambda result: self.backend.record_run(self.account, result)
-        self.go(GameScreen(difficulty, on_exit=lambda: self.go(MapSelectScreen(self)), on_finish=record, sandbox=sandbox))
+    def play(self, difficulty, sandbox=False, resume=None):
+        name, mode = difficulty['name'], 'sandbox' if sandbox else 'regular'
+
+        def record(result):
+            return self.backend.record_run(self.account, result)
+
+        def checkpoint(state):
+            if state is None:
+                self.backend.clear_checkpoint(self.account, name, mode)
+            else:
+                self.backend.save_checkpoint(self.account, name, mode, state)
+
+        self.go(GameScreen(difficulty, on_exit=lambda: self.go(MapSelectScreen(self)), on_finish=record, sandbox=sandbox,
+                           on_checkpoint=checkpoint, resume=resume))
 
     def run(self, frames=None):
         count = 0
@@ -265,6 +276,54 @@ class MapSelectScreen:
             locked = thumb.copy()
             locked.fill((120, 110, 100, 255), special_flags=pygame.BLEND_RGBA_MULT)
             self.locked_thumbs[difficulty['name']] = locked
+        self.prompt = None
+        self.new_button = Button((330, 362, 142, 44), 'New game', 'secondary')
+        self.continue_button = Button((488, 362, 142, 44), 'Continue')
+
+    def start(self, difficulty, sandbox=False):
+        mode = 'sandbox' if sandbox else 'regular'
+        try:
+            saved = self.app.backend.load_checkpoint(self.app.account, difficulty['name'], mode)
+        except (AccountError, AccessDenied):
+            saved = None
+        if isinstance(saved, dict) and saved.get('version') == CHECKPOINT_VERSION:
+            self.prompt = (difficulty, sandbox, saved)
+        elif sandbox:
+            self.app.play(difficulty, sandbox=True)
+        else:
+            self.app.play(difficulty)
+
+    def handle_prompt(self, event):
+        difficulty, sandbox, saved = self.prompt
+        if self.continue_button.clicked(event) or pressed_enter(event):
+            self.prompt = None
+            self.app.play(difficulty, sandbox=sandbox, resume=saved)
+        elif self.new_button.clicked(event):
+            self.prompt = None
+            try:
+                self.app.backend.clear_checkpoint(self.app.account, difficulty['name'], 'sandbox' if sandbox else 'regular')
+            except (AccountError, AccessDenied):
+                pass
+            self.app.play(difficulty, sandbox=sandbox)
+        elif pressed_escape(event):
+            self.prompt = None
+
+    def draw_prompt(self, screen):
+        difficulty, sandbox, saved = self.prompt
+        ui.dim(screen, (70, 40, 10, 110))
+        ui.card(screen, (310, 214, 340, 212))
+        ui.text(screen, 'Continue your game?', 22, ui.NAVY, (480, 246), bold=True, anchor='center')
+        mode = 'Sandbox' if sandbox else 'Regular'
+        ui.text(screen, f"{difficulty['map_name']}  ·  {difficulty['name']}  ·  {mode}", 13, ui.MUTED, (480, 276), anchor='center')
+        wave = int(saved['wave'])
+        ui.text(screen, f'Wave {wave} cleared. Pick up at wave {wave+1}?', 15, ui.INK, (480, 306), bold=True, anchor='center')
+        towers = len(saved.get('towers', []))
+        details = f"{saved['lives']} lives  ·  {towers} tower{'s' if towers != 1 else ''}"
+        if not sandbox:
+            details += f"  ·  ${saved['money']}"
+        ui.text(screen, details, 13, ui.MUTED, (480, 332), anchor='center')
+        self.new_button.draw(screen)
+        self.continue_button.draw(screen)
 
     def is_open(self, difficulty):
         return difficulty['name'] in self.unlocked
@@ -274,6 +333,9 @@ class MapSelectScreen:
         return pygame.Rect(rect.x+16, rect.y+234, 80, 32), pygame.Rect(rect.x+104, rect.y+234, 80, 32)
 
     def handle(self, event):
+        if self.prompt is not None:
+            self.handle_prompt(event)
+            return
         if self.back.clicked(event) or pressed_escape(event):
             self.app.go(HomeScreen(self.app))
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -287,9 +349,9 @@ class MapSelectScreen:
                     return
                 play, sandbox = self.buttons(rect.move(0, -6))
                 if play.collidepoint(event.pos):
-                    self.app.play(difficulty)
+                    self.start(difficulty)
                 elif sandbox.collidepoint(event.pos):
-                    self.app.play(difficulty, sandbox=True)
+                    self.start(difficulty, sandbox=True)
 
     def update(self, dt):
         pass
@@ -325,6 +387,8 @@ class MapSelectScreen:
                 Button(sandbox, 'Sandbox', 'secondary').draw(screen)
             else:
                 Button((r.x+16, r.y+234, 168, 32), 'Locked', 'disabled').draw(screen, False)
+        if self.prompt is not None:
+            self.draw_prompt(screen)
 
 
 BOARD_TABS = {
