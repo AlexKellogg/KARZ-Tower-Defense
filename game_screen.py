@@ -3,6 +3,7 @@ from pathlib import Path
 import pygame
 
 import ui
+from economy import TOWER_COST
 from backend import DIFFICULTY_NAMES, ScoreQueued
 from enemy import PlaceholderEnemy
 from game_session import GameClock, GameSession, format_time
@@ -112,7 +113,10 @@ class GameScreen:
         return [t.footprint for t in self.towers]
 
     def try_upgrade(self):
-        if self.selected is not None:
+        if self.selected is None:
+            return
+        cost = self.session.economy.upgrade_cost(self.selected)
+        if cost is not None and self.session.economy.spend(cost):
             self.selected.upgrade()
 
     def finish(self):
@@ -148,7 +152,9 @@ class GameScreen:
             elif event.key == pygame.K_n and self.sandbox:
                 self.session.skip_break()
             elif event.key == pygame.K_z and self.towers:
-                if self.towers.pop() is self.selected:
+                removed = self.towers.pop()
+                self.session.economy.earn(self.session.economy.tower_refund(removed))
+                if removed is self.selected:
                     self.selected = None
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             self.selected = None
@@ -166,7 +172,8 @@ class GameScreen:
                 clicked = next((t for t in self.towers if t.contains(x, y)), None)
                 if clicked is not None:
                     self.selected = clicked
-                elif self.map.can_place(x, y, TOWER_RADIUS, self.footprints()):
+                elif (self.map.can_place(x, y, TOWER_RADIUS, self.footprints())
+                      and self.session.economy.spend(TOWER_COST)):
                     self.towers.append(Tower(x, y, TOWER_RADIUS))
                     self.selected = None
                 else:
@@ -231,7 +238,7 @@ class GameScreen:
         if self.sandbox:
             stats = f'Wave {max(1, s.wave)}   Leaked {s.leaked}   Kills {s.kills}   Money ∞'
         else:
-            stats = f'Wave {max(1, s.wave)}/{s.clear_wave}   Lives {s.lives}   Time {format_time(s.elapsed)}   Kills {s.kills}'
+            stats = f'Wave {max(1, s.wave)}/{s.clear_wave}   Lives {s.lives}   Kills {s.kills}   Money ${s.economy.money}'
         ui.text(screen, stats, 15, (236, 233, 223), (18, 588), bold=True)
         chip = ui.chip(screen, self.difficulty['name'].upper(), self.difficulty['color'], (30+ui.text_width(stats, 15, True), 587))
         if self.sandbox:
@@ -240,7 +247,7 @@ class GameScreen:
             t = self.selected.stats
             info = f'Selected: level {self.selected.level+1}/{len(self.selected.levels)}   range {t.range:g}   dmg {t.damage:g}   rate {t.fire_rate:g}/s'
         else:
-            info = 'Click: place / select   U: upgrade   Z: undo   Space: pause   F: speed   Esc: menu'
+            info = f'Click: build (${TOWER_COST}) / select   U: upgrade   Z: refund   Space: pause   F: speed   Esc: menu'
             if self.sandbox:
                 info = 'Click: place / select   U: upgrade   Z: undo   N: next wave   Space: pause   F: speed   Esc: menu'
         ui.text(screen, info, 13, (189, 185, 175), (18, 614))
@@ -248,11 +255,14 @@ class GameScreen:
         hover = self.menu_button.collidepoint(mx, my)
         ui.rounded(screen, self.menu_button, (78, 82, 92) if hover else (60, 63, 70), 8)
         ui.text(screen, 'Menu', 15, (245, 245, 240), self.menu_button.center, bold=True, anchor='center')
-        enabled = self.selected is not None and self.selected.can_upgrade
+        upgrade_cost = self.session.economy.upgrade_cost(self.selected) if self.selected is not None else None
+        enabled = upgrade_cost is not None and self.session.economy.can_afford(upgrade_cost)
         hover = self.upgrade_button.collidepoint(mx, my)
         fill = ((70, 150, 95) if hover else (55, 125, 80)) if enabled else (60, 63, 70)
         ui.rounded(screen, self.upgrade_button, fill, 8)
-        label = 'Max level' if self.selected is not None and not self.selected.can_upgrade else 'Upgrade (free)'
+        label = ('Max level' if self.selected is not None and upgrade_cost is None
+                 else f'Upgrade (${upgrade_cost})' if upgrade_cost is not None and not self.sandbox
+                 else 'Upgrade (free)')
         ui.text(screen, label, 15, (245, 245, 240) if enabled else (140, 140, 145), self.upgrade_button.center, bold=True, anchor='center')
         if self.result is not None:
             return
@@ -317,7 +327,8 @@ class GameScreen:
         if self.result is None:
             over_tower = any(t.contains(mx, my) for t in self.towers)
             if 0 <= mx < MAP_SIZE[0] and 0 <= my < MAP_SIZE[1] and not over_tower:
-                draw_placement(screen, mx, my, self.map.can_place(mx, my, TOWER_RADIUS, self.footprints()))
+                draw_placement(screen, mx, my, self.map.can_place(mx, my, TOWER_RADIUS, self.footprints())
+                               and self.session.economy.can_afford(TOWER_COST))
         if self.clock.paused and self.result is None:
             ui.dim(screen, (20, 14, 6, 90))
             ui.rounded(screen, (380, 250, 200, 76), (30, 50, 104, 235), 16)
