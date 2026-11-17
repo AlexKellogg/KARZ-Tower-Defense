@@ -1,8 +1,10 @@
+from math import cos, pi, sin
 from pathlib import Path
 
 import pygame
 
 import ui
+from achievements import AchievementTracker
 from economy import TOWER_COST
 from backend import DIFFICULTY_NAMES, ScoreQueued
 from enemy import PlaceholderEnemy
@@ -43,19 +45,69 @@ LOSS_COLOR = (196, 64, 82)
 PLACE_OK = (60, 210, 120)
 PLACE_BLOCKED = (235, 70, 70)
 SANDBOX_COLOR = (62, 132, 196)
+TOAST_TIME = 3.5
+
+
+TOWER_DARK = (44, 64, 80)
+TOWER_METAL = (92, 104, 116)
+
+
+def _barrel(surface, x, y, aim, offset, length, width, color):
+    ax, ay = aim
+    nx, ny = -ay*offset, ax*offset
+    pygame.draw.line(surface, color, (x+nx, y+ny), (x+nx+ax*length, y+ny+ay*length), width)
+
+
+def _polygon(x, y, radius, sides, turn=0.0):
+    return [(x+radius*cos(turn+k*2*pi/sides), y+radius*sin(turn+k*2*pi/sides)) for k in range(sides)]
 
 
 def draw_tower(surface, tower, selected):
+    """Each upgrade level has its own look: a basic turret, a twin-barrel turret, then a gold heavy cannon."""
     P = ui.px
     x, y, r = P(tower.x), P(tower.y), P(tower.radius)
-    ax, ay = tower.aim
-    pygame.draw.circle(surface, (44, 64, 80), (x, y), r)
-    pygame.draw.circle(surface, LEVEL_COLORS[tower.level % len(LEVEL_COLORS)], (x, y), r-P(4))
-    pygame.draw.line(surface, (44, 64, 80), (x, y), (x+ax*(r+P(6)), y+ay*(r+P(6))), P(6))
+    level = min(tower.level, len(LEVEL_COLORS)-1)
+    body = LEVEL_COLORS[level]
+    if level == 0:
+        pygame.draw.circle(surface, TOWER_DARK, (x, y), r)
+        pygame.draw.circle(surface, body, (x, y), r-P(4))
+        _barrel(surface, x, y, tower.aim, 0, r+P(6), P(6), TOWER_DARK)
+    elif level == 1:
+        pygame.draw.polygon(surface, TOWER_DARK, _polygon(x, y, r+P(1), 8, pi/8))
+        pygame.draw.polygon(surface, body, _polygon(x, y, r-P(3), 8, pi/8))
+        for side in (-P(4), P(4)):
+            _barrel(surface, x, y, tower.aim, side, r+P(7), P(4), TOWER_DARK)
+        pygame.draw.circle(surface, TOWER_METAL, (x, y), P(6))
+    else:
+        pygame.draw.polygon(surface, TOWER_DARK, _polygon(x, y, r+P(3), 4, pi/4))
+        pygame.draw.polygon(surface, body, _polygon(x, y, r-P(1), 4, pi/4))
+        for cx, cy in _polygon(x, y, r-P(5), 4, pi/4):
+            pygame.draw.circle(surface, TOWER_DARK, (cx, cy), P(2))
+        _barrel(surface, x, y, tower.aim, 0, r+P(10), P(9), TOWER_DARK)
+        _barrel(surface, x, y, tower.aim, 0, r+P(10), P(3), TOWER_METAL)
+        pygame.draw.circle(surface, TOWER_DARK, (x, y), P(8))
+        pygame.draw.circle(surface, (255, 226, 140), (x, y), P(5))
     for i in range(tower.level+1):
-        pygame.draw.circle(surface, (250, 245, 230), (x+P(i*8-tower.level*4), y+r+P(5)), P(3))
+        pygame.draw.circle(surface, (250, 245, 230), (x+P(i*8-tower.level*4), y+r+P(6)), P(3))
     if selected:
-        pygame.draw.circle(surface, (255, 255, 255), (x, y), r+P(3), P(2))
+        pygame.draw.circle(surface, (255, 255, 255), (x, y), r+P(5), P(2))
+
+
+def draw_achievement_toast(surface, achievement, remaining):
+    """A small card in the top-left corner that slides in, waits, then fades out."""
+    shown = TOAST_TIME-remaining
+    slide = min(1.0, shown/0.25)
+    alpha = max(0.0, min(1.0, remaining/0.4))
+    w, h = 300, 58
+    x, y = 12-(1-slide)*(w+20), 58
+    layer = pygame.Surface((ui.px(w), ui.px(h)), pygame.SRCALPHA)
+    ui.rounded(layer, (0, 0, w, h), (30, 50, 104, 235), 12, (255, 214, 120), 2)
+    ui.circle(layer, (29, 29), 17, (255, 214, 120))
+    ui.icon(layer, 'star', (30, 50, 104), 22, (29, 29))
+    ui.text(layer, 'ACHIEVEMENT UNLOCKED', 10, ui.GOLD_TEXT, (56, 11), bold=True, tracking=2)
+    ui.text(layer, achievement.name, 15, ui.WHITE, (56, 26), bold=True)
+    layer.set_alpha(round(255*alpha))
+    surface.blit(layer, (ui.px(x), ui.px(y)))
 
 
 def draw_range(surface, x, y, rng, color):
@@ -83,8 +135,12 @@ def draw_placement(surface, x, y, ok):
 
 
 class GameScreen:
-    def __init__(self, difficulty, on_exit, on_finish=None, sandbox=False, on_checkpoint=None, resume=None):
+    def __init__(self, difficulty, on_exit, on_finish=None, sandbox=False, on_checkpoint=None, resume=None,
+                 on_achievements=None, achievements=()):
         self.difficulty = difficulty
+        self.on_achievements = on_achievements
+        self.known_achievements = set(achievements)
+        self.toasts = []
         self.sandbox = sandbox
         self.on_exit = on_exit
         self.on_finish = on_finish
@@ -112,6 +168,9 @@ class GameScreen:
                 self.session = GameSession(self.difficulty['name'], sandbox=self.sandbox)
                 self.towers = []
         self.saved_wave = self.session.waves_cleared
+        self.tracker = AchievementTracker(self.known_achievements, enabled=not self.sandbox)
+        self.tracked_wave = self.session.waves_cleared
+        self.game_achievements = []
         self.clock = GameClock()
         self.selected = None
         self.show_zones = False
@@ -142,16 +201,36 @@ class GameScreen:
     def footprints(self):
         return [t.footprint for t in self.towers]
 
+    def award(self, found):
+        if not found:
+            return
+        ids = [a.id for a in found]
+        self.known_achievements.update(ids)
+        self.game_achievements.extend(found)
+        self.toasts.extend([a, TOAST_TIME] for a in found)
+        if self.on_achievements is not None:
+            try:
+                self.on_achievements(ids)
+            except Exception:
+                pass
+
+    def money_changed(self):
+        self.award(self.tracker.economy_changed(self.session.economy))
+
     def try_upgrade(self):
         if self.selected is None:
             return
         cost = self.session.economy.upgrade_cost(self.selected)
         if cost is not None and self.session.economy.spend(cost):
             self.selected.upgrade()
+            self.award(self.tracker.tower_upgraded(self.selected))
+            self.money_changed()
 
     def finish(self):
         self.result = self.session.result()
         self.selected = None
+        if self.result.won:
+            self.award(self.tracker.game_won(self.result.difficulty, self.result.lives_lost))
         if self.on_finish is None or self.sandbox:
             return
         try:
@@ -198,7 +277,8 @@ class GameScreen:
                 self.session.skip_break()
             elif event.key == pygame.K_z and self.towers:
                 removed = self.towers.pop()
-                self.session.economy.earn(self.session.economy.tower_refund(removed))
+                self.session.economy.refund(self.session.economy.tower_refund(removed))
+                self.money_changed()
                 if removed is self.selected:
                     self.selected = None
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
@@ -221,10 +301,15 @@ class GameScreen:
                       and self.session.economy.spend(TOWER_COST)):
                     self.towers.append(Tower(x, y, TOWER_RADIUS))
                     self.selected = None
+                    self.award(self.tracker.tower_built(len(self.towers)))
+                    self.money_changed()
                 else:
                     self.selected = None
 
     def update(self, dt):
+        for toast in self.toasts[:1]:
+            toast[1] -= dt
+        self.toasts = [t for t in self.toasts if t[1] > 0]
         for step in self.clock.steps(dt):
             if self.result is not None:
                 return
@@ -233,6 +318,9 @@ class GameScreen:
     def step(self, dt):
         for hp, speed in self.session.update(dt, len(self.enemies)):
             self.enemies.append(PlaceholderEnemy(self.map.waypoints, hp=hp, speed=speed))
+        if self.session.waves_cleared > self.tracked_wave:
+            self.tracked_wave = self.session.waves_cleared
+            self.award(self.tracker.wave_cleared(self.tracked_wave))
         if self.session.waves_cleared > self.saved_wave:
             self.checkpoint()
         for enemy in self.enemies:
@@ -245,6 +333,7 @@ class GameScreen:
                 self.shots.append([muzzle, hit.pos, SHOT_FLASH])
                 if hit.hp == 0:
                     self.session.enemy_killed()
+                    self.money_changed()
         for enemy in self.enemies:
             if enemy.reached_end:
                 self.session.enemy_leaked()
@@ -365,6 +454,11 @@ class GameScreen:
         elif self.unlocked:
             ui.rounded(screen, (340, 378, 280, 28), (232, 244, 236), 14)
             ui.text(screen, f'New level unlocked: {", ".join(self.unlocked)}', 13, WIN_COLOR, (480, 392), bold=True, anchor='center')
+        if self.game_achievements:
+            label = 'Achievements: '+', '.join(a.name for a in self.game_achievements)
+            while ui.text_width(label, 12, True) > 330:
+                label = label[:-2]+'…'
+            ui.text(screen, label, 12, (176, 128, 30), (480, 474), bold=True, anchor='center')
         self.levels_button.draw(screen)
         self.again_button.draw(screen)
 
@@ -384,3 +478,6 @@ class GameScreen:
         self.draw_hud(screen, mx, my)
         if self.result is not None:
             self.draw_result(screen)
+        if self.toasts:
+            achievement, remaining = self.toasts[0]
+            draw_achievement_toast(screen, achievement, remaining)

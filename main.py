@@ -18,7 +18,7 @@ def main():
     from backend import RunResult
     from game_screen import DIFFICULTIES
     from local_backend import LocalBackend
-    from screens import (AdminScreen, App, HomeScreen, LeaderboardScreen, MapSelectScreen, SettingsScreen,
+    from screens import (AchievementsScreen, AdminScreen, App, HomeScreen, LeaderboardScreen, MapSelectScreen, SettingsScreen,
                          SignUpScreen)
     pygame.init()
     try:
@@ -31,7 +31,8 @@ def main():
                 app.run(frames=3)
                 app.account = backend.sign_up('Smoke Test', 'smoke', 'smoke@example.com', 'password123')
                 backend.record_run(app.account, RunResult('Easy', True, 900, 140.0, 2, 5, 60))
-                for screen in (HomeScreen, SettingsScreen, MapSelectScreen, LeaderboardScreen):
+                backend.unlock_achievements(app.account, ['first_win', 'builder'])
+                for screen in (HomeScreen, SettingsScreen, MapSelectScreen, LeaderboardScreen, AchievementsScreen):
                     app.go(screen(app))
                     app.run(frames=3)
                 app.play(DIFFICULTIES[0])

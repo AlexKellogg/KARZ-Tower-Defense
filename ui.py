@@ -202,6 +202,11 @@ def _icon(name, color, size):
                              (c+math.cos(a)*s*0.42, c+math.sin(a)*s*0.42), int(w*1.6))
         pygame.draw.circle(big, color, (c, c), s*0.3)
         pygame.draw.circle(big, (0, 0, 0, 0), (c, c), s*0.12)
+    elif name == 'star':
+        c, outer, inner = s/2, s*0.46, s*0.19
+        points = [(c+math.cos(-math.pi/2+k*math.pi/5)*(outer if k % 2 == 0 else inner),
+                   c+0.04*s+math.sin(-math.pi/2+k*math.pi/5)*(outer if k % 2 == 0 else inner)) for k in range(10)]
+        pygame.draw.polygon(big, color, points)
     elif name == 'back':
         pygame.draw.lines(big, color, False, [(s*0.62, s*0.2), (s*0.32, s*0.5), (s*0.62, s*0.8)], w+2)
     return pygame.transform.smoothscale(big, (size, size))

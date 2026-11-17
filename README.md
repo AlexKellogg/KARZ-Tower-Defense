@@ -59,6 +59,28 @@ On macOS, use `python3 -m venv .venv`, then `.venv/bin/python` in place of `.\.v
 
 Between waves, the top banner previews the next wave (enemy count and HP). During a wave, the chip in the top-right corner shows what is coming next. Speed-ups run the simulation in extra steps, so the in-game timer counts game time and the time leaderboard stays fair.
 
+## Achievements
+
+Open **Achievements** from the home screen to see all eight, which ones you have, and when you unlocked them.
+They unlock during regular games only (sandbox towers are free, so tower and gold goals would not mean anything there):
+
+| Achievement | Goal |
+| --- | --- |
+| First Victory | Win your first game |
+| Untouchable | Clear every wave on a map without losing a life |
+| Razorback Conqueror | Beat a Hard map |
+| Survivor | Clear 5 waves in one game |
+| Builder | Have 10 towers on the map at once |
+| Fully Loaded | Upgrade a tower to its max level |
+| Gold Rush | Earn $400 from kills in one game |
+| Big Spender | Spend $500 in one game (refunds don't count) |
+
+A pop-up appears in the top-left corner the moment one unlocks, and it is saved to your account right away.
+Achievements unlocked while the server is down are queued with your scores and uploaded later.
+Goals are placeholders in `achievements.py`; ids are stored in the database, so change goals freely but never rename an id.
+
+Towers also look different at each upgrade level: a basic turret, a twin-barrel turret, then a gold heavy cannon.
+
 ## Online accounts (FastAPI server)
 
 **Quickest way on Windows:** double-click **Play KARZ Online.cmd**. The first time, it creates `.venv` and installs everything. After that it opens the server window and the game together, already connected. Close the server window to stop the server.

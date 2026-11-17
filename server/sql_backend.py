@@ -11,7 +11,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.pool import StaticPool
 
 from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, MODES, ROLES, AccessDenied, Account,
-                     AccountError, AccountSummary, Backend, LeaderboardEntry, checkpoint_json, unlocked_for)
+                     AccountError, AccountSummary, Backend, LeaderboardEntry, achievement_ids, checkpoint_json,
+                     unlocked_for)
 from local_backend import EMAIL_RE, MIN_PASSWORD, _hash
 from server.migrate import upgrade_database
 
@@ -84,6 +85,13 @@ class CheckpointRow(Base):
     mode: Mapped[str] = mapped_column(String(10), primary_key=True)
     state: Mapped[str] = mapped_column(Text)
     saved_at: Mapped[str] = mapped_column(String(19))
+
+
+class AchievementRow(Base):
+    __tablename__ = 'achievements'
+    account_id: Mapped[int] = mapped_column(ForeignKey('accounts.id'), primary_key=True)
+    achievement_id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    unlocked_at: Mapped[str] = mapped_column(String(19))
 
 
 LEADERBOARD_ORDER = {
@@ -270,6 +278,24 @@ class SqlBackend(Backend):
             db.execute(delete(CheckpointRow).where(CheckpointRow.account_id == account.id,
                                                    CheckpointRow.difficulty == difficulty, CheckpointRow.mode == mode))
             db.commit()
+
+    def achievements(self, account):
+        with self._session() as db:
+            self._row(db, account.id)
+            rows = db.execute(select(AchievementRow.achievement_id, AchievementRow.unlocked_at)
+                              .where(AchievementRow.account_id == account.id)).all()
+            return dict(rows)
+
+    def unlock_achievements(self, account, ids):
+        ids = achievement_ids(ids)
+        with self._session() as db:
+            self._row(db, account.id)
+            have = set(db.scalars(select(AchievementRow.achievement_id).where(AchievementRow.account_id == account.id)))
+            new = tuple(i for i in ids if i not in have)
+            now = _now()
+            db.add_all(AchievementRow(account_id=account.id, achievement_id=i, unlocked_at=now) for i in new)
+            db.commit()
+            return new
 
     def promote_by_email(self, email):
         with self._session() as db:

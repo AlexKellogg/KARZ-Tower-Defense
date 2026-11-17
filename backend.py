@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from numbers import Real
 
+from achievements import ACHIEVEMENT_IDS
+
 DIFFICULTY_NAMES = ('Easy', 'Medium', 'Hard', 'Impossible')
 ROLES = ('user', 'admin')
 LEADERBOARD_KINDS = ('score', 'time', 'lives', 'waves')
@@ -104,6 +106,16 @@ def checkpoint_json(difficulty, mode, state):
     return text
 
 
+def achievement_ids(ids):
+    """Checks a list of achievement ids sent by the game and returns them without duplicates, in order."""
+    if isinstance(ids, str) or not all(isinstance(i, str) for i in ids):
+        raise AccountError('Achievement ids must be a list of names.')
+    unknown = [i for i in ids if i not in ACHIEVEMENT_IDS]
+    if unknown:
+        raise AccountError(f'Unknown achievement: {unknown[0]}')
+    return tuple(dict.fromkeys(ids))
+
+
 def unlocked_for(role, highest_won_index):
     if role == 'admin':
         return DIFFICULTY_NAMES
@@ -154,3 +166,11 @@ class Backend(ABC):
     @abstractmethod
     def clear_checkpoint(self, account, difficulty, mode):
         """Removes the saved state for that level and mode, if any."""
+
+    @abstractmethod
+    def achievements(self, account):
+        """Returns {achievement id: unlocked_at} for everything this account has unlocked."""
+
+    @abstractmethod
+    def unlock_achievements(self, account, ids):
+        """Saves unlocked achievements. Ids already unlocked are ignored. Returns the ids that were new."""
