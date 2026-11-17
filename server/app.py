@@ -46,6 +46,10 @@ class CheckpointBody(BaseModel):
     state: dict
 
 
+class AchievementsBody(BaseModel):
+    ids: list[str] = Field(max_length=50)
+
+
 class RoleBody(BaseModel):
     role: str = Field(max_length=10)
 
@@ -150,6 +154,14 @@ def create_app(backend=None):
     def clear_checkpoint(difficulty: str, mode: str, account=Depends(current_account)):
         backend.clear_checkpoint(account, difficulty, mode)
         return {'status': 'ok'}
+
+    @app.get('/me/achievements')
+    def achievements(account=Depends(current_account)):
+        return {'achievements': backend.achievements(account)}
+
+    @app.post('/me/achievements')
+    def unlock_achievements(body: AchievementsBody, account=Depends(current_account)):
+        return {'unlocked': list(backend.unlock_achievements(account, body.ids))}
 
     @app.get('/admin/accounts')
     def list_accounts(account=Depends(current_account)):

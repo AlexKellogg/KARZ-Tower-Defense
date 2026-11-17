@@ -62,6 +62,29 @@ class SqliteMigrationTests(unittest.TestCase):
         backend.close()
         self.assertEqual(drift(self.engine), [])
 
+    def test_achievements_migration_keeps_existing_saves(self):
+        self.migrate_to('0003')
+        with self.engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO accounts (id, name, username, username_key, email, salt, password_hash, role, created_at) "
+                "VALUES (1, 'Zlata', 'zlata', 'zlata', 'zlata@example.com', X'00', X'00', 'user', '2026-11-01 00:00:00')")
+            connection.exec_driver_sql(
+                "INSERT INTO runs (account_id, difficulty, won, score, time_seconds, lives_lost, waves_cleared, kills, "
+                "played_at, mode) VALUES (1, 'Easy', 1, 800, 90.0, 0, 5, 60, '2026-11-01 00:00:00', 'regular')")
+            connection.exec_driver_sql(
+                "INSERT INTO checkpoints (account_id, difficulty, mode, state, saved_at) VALUES "
+                "(1, 'Medium', 'regular', '{\"wave\": 3}', '2026-11-01 00:00:00')")
+        self.assertNotIn('achievements', inspect(self.engine).get_table_names())
+        backend = SqlBackend(self.url)
+        self.assertEqual(current_revision(backend.engine), HEAD)
+        account = backend._get(1)
+        self.assertEqual(backend.load_checkpoint(account, 'Medium', 'regular'), {'wave': 3})
+        self.assertEqual([e.value for e in backend.leaderboard('score')], [800])
+        self.assertEqual(backend.achievements(account), {})
+        self.assertEqual(backend.unlock_achievements(account, ['first_win']), ('first_win',))
+        backend.close()
+        self.assertEqual(drift(self.engine), [])
+
     def test_running_migrations_twice_changes_nothing(self):
         SqlBackend(self.url).close()
         upgrade_database(self.engine)

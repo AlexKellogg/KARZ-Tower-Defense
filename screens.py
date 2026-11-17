@@ -1,6 +1,7 @@
 import pygame
 
 import ui
+from achievements import ACHIEVEMENTS
 from backend import CHECKPOINT_VERSION, DIFFICULTY_NAMES, LEADERBOARD_SIZE, AccessDenied, AccountError
 from game_screen import DIFFICULTIES, DIFFICULTY_STYLE, GameScreen
 from game_session import format_time
@@ -51,8 +52,15 @@ class App:
             else:
                 self.backend.save_checkpoint(self.account, name, mode, state)
 
+        def unlock(ids):
+            self.backend.unlock_achievements(self.account, ids)
+
+        try:
+            known = self.backend.achievements(self.account)
+        except (AccountError, AccessDenied):
+            known = {}
         self.go(GameScreen(difficulty, on_exit=lambda: self.go(MapSelectScreen(self)), on_finish=record, sandbox=sandbox,
-                           on_checkpoint=checkpoint, resume=resume))
+                           on_checkpoint=checkpoint, resume=resume, on_achievements=unlock, achievements=known))
 
     def run(self, frames=None):
         count = 0
@@ -174,7 +182,8 @@ class HomeScreen:
         self.settings = Button((888, 22, 46, 46), '', 'ghost', 'gear')
         self.play = Button((370, 312, 220, 64), 'Play', 'hero')
         self.leaderboard = Button((370, 396, 220, 44), 'Leaderboard', 'secondary')
-        self.accounts = Button((370, 452, 220, 44), 'All accounts', 'secondary') if app.account.is_admin else None
+        self.achievements = Button((370, 452, 220, 44), 'Achievements', 'secondary')
+        self.accounts = Button((370, 508, 220, 44), 'All accounts', 'secondary') if app.account.is_admin else None
 
     def handle(self, event):
         if self.settings.clicked(event):
@@ -183,6 +192,8 @@ class HomeScreen:
             self.app.go(MapSelectScreen(self.app))
         elif self.leaderboard.clicked(event):
             self.app.go(LeaderboardScreen(self.app))
+        elif self.achievements.clicked(event):
+            self.app.go(AchievementsScreen(self.app))
         elif self.accounts is not None and self.accounts.clicked(event):
             self.app.go(AdminScreen(self.app))
 
@@ -198,7 +209,7 @@ class HomeScreen:
         ui.text(screen, 'KARZ', 84, ui.ON_BG, (480, 194), bold=True, anchor='center', tracking=22)
         ui.text(screen, 'TOWER DEFENSE', 16, ui.ON_BG_SOFT, (480, 252), anchor='center', tracking=8)
         hover = None if interactive else False
-        for button in (self.settings, self.play, self.leaderboard, self.accounts):
+        for button in (self.settings, self.play, self.leaderboard, self.achievements, self.accounts):
             if button is not None:
                 button.draw(screen, hover)
 
@@ -505,6 +516,62 @@ class LeaderboardScreen:
             ui.text(screen, entry.difficulty, 12, DIFFICULTY_STYLE[entry.difficulty][0], (586, y), bold=True)
             ui.text(screen, entry.played_at[:10], 12, ui.MUTED, (700, y))
         ui.text(screen, f'Top {LEADERBOARD_SIZE} players, best result each', 11, ui.MUTED, (794, 612), anchor='topright')
+
+
+class AchievementsScreen:
+    COLUMNS = 2
+    CARD = (424, 88)
+    GOLD = (255, 214, 120)
+    LOCKED = (196, 186, 170)
+
+    def __init__(self, app):
+        self.app = app
+        self.back = Button((24, 22, 46, 46), '', 'ghost', 'back')
+        self.error = ''
+        try:
+            self.unlocked = self.app.backend.achievements(self.app.account)
+        except (AccountError, AccessDenied) as e:
+            self.unlocked = {}
+            self.error = str(e)
+
+    def handle(self, event):
+        if self.back.clicked(event) or pressed_escape(event):
+            self.app.go(HomeScreen(self.app))
+
+    def update(self, dt):
+        pass
+
+    def card_rect(self, index):
+        w, h = self.CARD
+        col, row = index % self.COLUMNS, index//self.COLUMNS
+        return pygame.Rect(48+col*(w+16), 168+row*(h+14), w, h)
+
+    def draw(self, screen):
+        ui.background(screen)
+        self.back.draw(screen)
+        ui.text(screen, 'Achievements', 30, ui.ON_BG, (480, 58), bold=True, anchor='center')
+        done = sum(a.id in self.unlocked for a in ACHIEVEMENTS)
+        ui.text(screen, f'{done} of {len(ACHIEVEMENTS)} unlocked', 14, ui.ON_BG_SOFT, (480, 94), anchor='center')
+        ui.rounded(screen, (330, 118, 300, 10), (255, 250, 240, 200), 5)
+        if done:
+            ui.rounded(screen, (330, 118, max(10, 300*done/len(ACHIEVEMENTS)), 10), ui.BUTTON, 5)
+        if self.error:
+            ui.text(screen, self.error, 13, ui.ERROR, (480, 146), anchor='center')
+        else:
+            ui.text(screen, 'Achievements unlock in regular games, not sandbox.', 12, ui.ON_BG_SOFT, (480, 146), anchor='center')
+        for i, achievement in enumerate(ACHIEVEMENTS):
+            rect = self.card_rect(i)
+            got = achievement.id in self.unlocked
+            ui.card(screen, rect, 12)
+            if not got:
+                ui.rounded(screen, rect, (236, 230, 220, 150), 12)
+            center = (rect.x+44, rect.centery)
+            ui.circle(screen, center, 26, self.GOLD if got else self.LOCKED)
+            ui.icon(screen, 'star' if got else 'lock', ui.BUTTON if got else (130, 120, 106), 26, center)
+            ui.text(screen, achievement.name, 17, ui.NAVY if got else ui.MUTED, (rect.x+86, rect.y+18), bold=True)
+            ui.text(screen, achievement.description, 13, ui.INK if got else ui.MUTED, (rect.x+86, rect.y+44))
+            status = f'Unlocked {self.unlocked[achievement.id][:10]}' if got else 'Locked'
+            ui.text(screen, status, 11, ui.SUCCESS if got else ui.MUTED, (rect.x+86, rect.y+64), bold=got)
 
 
 class AdminScreen:

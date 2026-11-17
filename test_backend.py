@@ -282,6 +282,42 @@ class CheckpointTests(BackendTestCase):
         self.assertIsNone(self.backend.load_checkpoint(self.zlata, 'Easy', 'regular'))
 
 
+class AchievementTests(BackendTestCase):
+    def test_nothing_unlocked_yet(self):
+        self.assertEqual(self.backend.achievements(self.zlata), {})
+
+    def test_unlock_saves_with_a_date_and_returns_only_new_ones(self):
+        self.assertEqual(self.backend.unlock_achievements(self.zlata, ['first_win', 'builder']), ('first_win', 'builder'))
+        self.assertEqual(self.backend.unlock_achievements(self.zlata, ['builder', 'survivor', 'survivor']), ('survivor',))
+        unlocked = self.backend.achievements(self.zlata)
+        self.assertEqual(set(unlocked), {'first_win', 'builder', 'survivor'})
+        self.assertRegex(unlocked['first_win'], r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$')
+
+    def test_unlocking_again_keeps_the_first_date(self):
+        self.backend.unlock_achievements(self.zlata, ['first_win'])
+        first = self.backend.achievements(self.zlata)['first_win']
+        self.assertEqual(self.backend.unlock_achievements(self.zlata, ['first_win']), ())
+        self.assertEqual(self.backend.achievements(self.zlata)['first_win'], first)
+
+    def test_players_only_see_their_own_achievements(self):
+        reagan = self.backend.sign_up('Reagan', 'reagan', 'reagan@example.com', 'password123')
+        self.backend.unlock_achievements(self.zlata, ['hard_win'])
+        self.assertEqual(self.backend.achievements(reagan), {})
+
+    def test_unknown_achievements_are_refused(self):
+        for bad in (['made_up'], ['first_win', 'made_up']):
+            with self.subTest(bad=bad), self.assertRaises(AccountError):
+                self.backend.unlock_achievements(self.zlata, bad)
+        self.assertEqual(self.backend.achievements(self.zlata), {})
+
+    def test_achievements_do_not_touch_runs_or_checkpoints(self):
+        self.backend.record_run(self.zlata, run('Easy', score=400))
+        self.backend.save_checkpoint(self.zlata, 'Medium', 'regular', state(wave=2))
+        self.backend.unlock_achievements(self.zlata, ['first_win'])
+        self.assertEqual([e.value for e in self.backend.leaderboard('score')], [400])
+        self.assertEqual(self.backend.load_checkpoint(self.zlata, 'Medium', 'regular')['wave'], 2)
+
+
 class MigrationTests(unittest.TestCase):
     def test_old_database_from_the_previous_version_still_works(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -300,6 +336,7 @@ class MigrationTests(unittest.TestCase):
             self.assertEqual(account.role, 'user')
             self.assertEqual(backend.unlocked_difficulties(account), ('Easy',))
             self.assertEqual(backend.record_run(account, run('Easy')), ('Medium',))
+            self.assertEqual(backend.unlock_achievements(account, ['first_win']), ('first_win',))
             backend.close()
 
 

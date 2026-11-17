@@ -103,6 +103,9 @@ class RemoteBackend(Backend):
         kind = entry.get('kind', 'run')
         if kind == 'run':
             return self._call('POST', '/me/runs', account, json=entry['result'])['unlocked']
+        if kind == 'achievements':
+            self._call('POST', '/me/achievements', account, json={'ids': entry['ids']})
+            return []
         path = f"/me/checkpoints/{entry['difficulty']}/{entry['mode']}"
         if kind == 'checkpoint':
             self._call('PUT', path, account, json={'state': entry['state']})
@@ -196,3 +199,19 @@ class RemoteBackend(Backend):
 
     def clear_checkpoint(self, account, difficulty, mode):
         self._send_or_queue(account, {'kind': 'clear', 'difficulty': difficulty, 'mode': mode})
+
+    def achievements(self, account):
+        self._flush(account)
+        return self._call('GET', '/me/achievements', account)['achievements']
+
+    def unlock_achievements(self, account, ids):
+        entry = {'kind': 'achievements', 'ids': list(ids)}
+        if any(self._mine(e, account) for e in self._load_pending()):
+            self._queue(account, entry)
+            self._flush(account)
+            return tuple(ids)
+        try:
+            return tuple(self._call('POST', '/me/achievements', account, json={'ids': list(ids)})['unlocked'])
+        except (Offline, NotLoggedIn):
+            self._queue(account, entry)
+            return tuple(ids)

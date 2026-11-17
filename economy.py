@@ -9,6 +9,8 @@ class Economy:
     def __init__(self, sandbox=False, starting_money=STARTING_MONEY):
         self.sandbox = sandbox
         self.money = starting_money
+        self.spent = 0
+        self.earned = 0
 
     def can_afford(self, amount):
         return self.sandbox or self.money >= amount
@@ -20,6 +22,7 @@ class Economy:
             return False
         if not self.sandbox:
             self.money -= amount
+            self.spent += amount
         return True
 
     def earn(self, amount):
@@ -27,6 +30,15 @@ class Economy:
             raise ValueError('Reward cannot be negative')
         if not self.sandbox:
             self.money += amount
+            self.earned += amount
+
+    def refund(self, amount):
+        """Gives money back for a removed tower. Refunds are not earnings and cancel out what was spent."""
+        if amount < 0:
+            raise ValueError('Refund cannot be negative')
+        if not self.sandbox:
+            self.money += amount
+            self.spent = max(0, self.spent-amount)
 
     @staticmethod
     def upgrade_cost(tower):

@@ -107,6 +107,20 @@ class PostgresCheckpointTests(PostgresFixture, contract.CheckpointTests):
     pass
 
 
+class ServerAchievementTests(ServerFixture, contract.AchievementTests):
+    pass
+
+
+@needs_postgres
+class PostgresAchievementTests(PostgresFixture, contract.AchievementTests):
+    pass
+
+
+class SqlAchievementTests(contract.AchievementTests):
+    def make_backend(self, folder):
+        return SqlBackend('sqlite://')
+
+
 class SqlBackendDirectTests(contract.BackendTestCase):
     def make_backend(self, folder):
         return SqlBackend('sqlite://')
@@ -368,6 +382,37 @@ class CheckpointQueueTests(QueueFixture, contract.BackendTestCase):
         for method in ('GET', 'PUT', 'DELETE'):
             response = self.http.request(method, '/me/checkpoints/Easy/regular', json={'state': contract.state()})
             self.assertEqual(response.status_code, 401)
+
+
+class AchievementQueueTests(QueueFixture, contract.BackendTestCase):
+    def test_achievements_unlocked_offline_reach_the_server_later(self):
+        self.http.down = True
+        self.assertEqual(self.backend.unlock_achievements(self.zlata, ['first_win', 'builder']), ('first_win', 'builder'))
+        self.http.down = False
+        self.assertEqual(set(self.backend.achievements(self.zlata)), {'first_win', 'builder'})
+        self.assertEqual(self.backend._load_pending(), [])
+
+    def test_offline_achievements_queue_alongside_scores_and_checkpoints(self):
+        self.http.down = True
+        self.backend.save_checkpoint(self.zlata, 'Easy', 'regular', contract.state(wave=3))
+        self.backend.unlock_achievements(self.zlata, ['survivor'])
+        with self.assertRaises(ScoreQueued):
+            self.backend.record_run(self.zlata, self.win(score=300))
+        self.http.down = False
+        self.assertEqual(self.backend.unlocked_difficulties(self.zlata), ('Easy', 'Medium'))
+        self.assertEqual(list(self.backend.achievements(self.zlata)), ['survivor'])
+        self.assertEqual(self.backend.load_checkpoint(self.zlata, 'Easy', 'regular')['wave'], 3)
+
+    def test_loading_achievements_while_offline_raises(self):
+        self.http.down = True
+        with self.assertRaises(AccountError):
+            self.backend.achievements(self.zlata)
+
+    def test_achievement_endpoints_need_a_login_and_known_ids(self):
+        self.assertEqual(self.http.get('/me/achievements').status_code, 401)
+        self.assertEqual(self.http.post('/me/achievements', json={'ids': ['first_win']}).status_code, 401)
+        with self.assertRaises(AccountError):
+            self.backend.unlock_achievements(self.zlata, ['not_real'])
 
 
 class OfflineTests(unittest.TestCase):

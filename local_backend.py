@@ -9,7 +9,8 @@ from pathlib import Path
 import json
 
 from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, MODES, ROLES, AccessDenied, Account,
-                     AccountError, AccountSummary, Backend, LeaderboardEntry, checkpoint_json, unlocked_for)
+                     AccountError, AccountSummary, Backend, LeaderboardEntry, achievement_ids, checkpoint_json,
+                     unlocked_for)
 
 # Local stand-in for the FastAPI backend, swap for the server version once it exists.
 DEFAULT_DB = Path.home()/'.karz_td'/'accounts.db'
@@ -71,6 +72,11 @@ class LocalBackend(Backend):
             state TEXT NOT NULL,
             saved_at TEXT NOT NULL,
             PRIMARY KEY (account_id, difficulty, mode))''')
+        self.db.execute('''CREATE TABLE IF NOT EXISTS achievements (
+            account_id INTEGER NOT NULL REFERENCES accounts(id),
+            achievement_id TEXT NOT NULL,
+            unlocked_at TEXT NOT NULL,
+            PRIMARY KEY (account_id, achievement_id))''')
         self.db.commit()
 
     def close(self):
@@ -226,3 +232,18 @@ class LocalBackend(Backend):
         self.db.execute("UPDATE accounts SET role = 'admin' WHERE id = ?", (row[0],))
         self.db.commit()
         return self._get(row[0])
+
+    def achievements(self, account):
+        self._get(account.id)
+        rows = self.db.execute('SELECT achievement_id, unlocked_at FROM achievements WHERE account_id = ?', (account.id,))
+        return dict(rows.fetchall())
+
+    def unlock_achievements(self, account, ids):
+        ids = achievement_ids(ids)
+        have = self.achievements(account)
+        new = tuple(i for i in ids if i not in have)
+        now = _now()
+        self.db.executemany('INSERT INTO achievements (account_id, achievement_id, unlocked_at) VALUES (?, ?, ?)',
+                            [(account.id, i, now) for i in new])
+        self.db.commit()
+        return new
