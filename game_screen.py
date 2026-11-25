@@ -27,8 +27,7 @@ MAPS = {
     'Easy': ('Desert Highway', 'desert_highway'),
     'Medium': ('Canyon Crossing', 'canyon_crossing'),
     'Hard': ('Razorback Pass', 'razorback_pass'),
-    # Replace this placeholder when its dedicated map is approved.
-    'Impossible': ('Desert Highway', 'desert_highway'),
+    'Impossible': ("Caldera's Edge", 'calderas_edge'),
 }
 DIFFICULTIES = tuple({
     'name': name, 'map_name': MAPS[name][0], 'map_path': MAP_DIRECTORY/f'{MAPS[name][1]}.tmx',
@@ -161,6 +160,8 @@ class GameScreen:
         self.resumed = False
         if resume is not None:
             try:
+                if self.difficulty['name'] == 'Impossible' and resume.get('map_id') != 'calderas_edge-v1':
+                    raise ValueError('Saved game belongs to the old placeholder map.')
                 self.session = GameSession.resume(self.difficulty['name'], resume, sandbox=self.sandbox)
                 self.towers = [self.rebuild_tower(t) for t in resume['towers']]
                 self.resumed = True
@@ -168,6 +169,8 @@ class GameScreen:
                 self.session = GameSession(self.difficulty['name'], sandbox=self.sandbox)
                 self.towers = []
         self.saved_wave = self.session.waves_cleared
+        self.spawn_lane = 0
+        self.spawn_wave = self.session.wave
         self.tracker = AchievementTracker(self.known_achievements, enabled=not self.sandbox)
         self.tracked_wave = self.session.waves_cleared
         self.game_achievements = []
@@ -192,6 +195,8 @@ class GameScreen:
             return
         state = {**self.session.snapshot(),
                  'towers': [{'x': round(t.x, 1), 'y': round(t.y, 1), 'level': t.level} for t in self.towers]}
+        if self.difficulty['name'] == 'Impossible':
+            state['map_id'] = 'calderas_edge-v1'
         self.saved_wave = self.session.waves_cleared
         try:
             self.on_checkpoint(state)
@@ -317,7 +322,12 @@ class GameScreen:
 
     def step(self, dt):
         for hp, speed in self.session.update(dt, len(self.enemies)):
-            self.enemies.append(PlaceholderEnemy(self.map.waypoints, hp=hp, speed=speed))
+            if self.spawn_wave != self.session.wave:
+                self.spawn_wave = self.session.wave
+                self.spawn_lane = 0
+            route = self.map.routes[self.spawn_lane % len(self.map.routes)]
+            self.spawn_lane += 1
+            self.enemies.append(PlaceholderEnemy(route, hp=hp, speed=speed))
         if self.session.waves_cleared > self.tracked_wave:
             self.tracked_wave = self.session.waves_cleared
             self.award(self.tracker.wave_cleared(self.tracked_wave))
