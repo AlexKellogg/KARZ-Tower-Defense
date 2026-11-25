@@ -12,6 +12,11 @@ class GameMap:
     roles: list
     waypoints: list
     artwork: object
+    routes: list = None
+
+    def __post_init__(self):
+        if self.routes is None:
+            self.routes = [self.waypoints]
 
     def role_at(self, x, y):
         col, row = floor(x/self.tile_size), floor(y/self.tile_size)
@@ -87,12 +92,12 @@ def load_map(path):
             properties = tiled.get_tile_properties_by_gid(gid) or {}
             roles.append({'path': 1, 'buildable': 2, 'blocker': 3, 'tunnel': 4}.get(properties.get('role'), 0))
     route = tiled.get_layer_by_name('Enemy route')
-    path_obj = next(obj for obj in route if obj.type == 'enemy_path')
-    points = [(point.x, point.y) for point in path_obj.points]
+    paths = [[(point.x, point.y) for point in obj.points]
+             for obj in route if obj.type == 'enemy_path']
     art_layer = tiled.get_layer_by_name('Artwork')
     art = tiled.get_tile_image_by_gid(art_layer.gid)
-    if len(points) < 2 or art is None or art.get_size() != (tiled.width*tiled.tilewidth, tiled.height*tiled.tileheight):
+    if not paths or any(len(p) < 2 for p in paths) or art is None or art.get_size() != (tiled.width*tiled.tilewidth, tiled.height*tiled.tileheight):
         raise ValueError('Missing route or artwork with incorrect dimensions.')
     if not isinstance(role_layer, pytmx.TiledTileLayer):
         raise ValueError('Tile roles must be a Tiled tile layer.')
-    return GameMap(tiled.width, tiled.height, tiled.tilewidth, roles, points, art)
+    return GameMap(tiled.width, tiled.height, tiled.tilewidth, roles, paths[0], art, paths)

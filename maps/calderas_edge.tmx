@@ -1,0 +1,128 @@
+<?xml version='1.0' encoding='utf-8'?>
+<map version="1.10" orientation="orthogonal" renderorder="right-down" width="20" height="12" tilewidth="48" tileheight="48" infinite="0" nextlayerid="8" nextobjectid="57">
+  <properties>
+    <property name="name" value="Caldera's Edge" />
+    <property name="difficulty" value="Impossible" />
+    <property name="clear_wave" value="10" type="int" />
+    <property name="theme" value="volcanic-caldera" />
+    <property name="decoration" value="approved-caldera-v1" />
+  </properties>
+  <tileset firstgid="1" name="Razorback roles" tilewidth="48" tileheight="48" tilecount="4" columns="4">
+    <image source="roles_hard.png" width="192" height="48" />
+    <tile id="0">
+      <properties>
+        <property name="role" value="path" />
+      </properties>
+    </tile>
+    <tile id="1">
+      <properties>
+        <property name="role" value="buildable" />
+      </properties>
+    </tile>
+    <tile id="2">
+      <properties>
+        <property name="role" value="blocker" />
+      </properties>
+    </tile>
+    <tile id="3">
+      <properties>
+        <property name="role" value="tunnel" />
+      </properties>
+    </tile>
+  </tileset>
+  <imagelayer id="1" name="Artwork" locked="1">
+    <image source="calderas_edge.png" width="960" height="576" />
+  </imagelayer>
+  <layer id="2" name="Tile roles" width="20" height="12" visible="0" opacity="0.4">
+    <data encoding="csv">0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,1,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,1,1,
+0,0,3,2,2,1,2,2,0,0,3,2,2,1,0,2,2,0,0,0,
+0,0,3,2,2,1,3,3,0,0,3,2,2,1,0,3,2,0,0,0,
+0,0,0,0,0,1,1,1,4,4,1,1,1,1,0,3,0,0,0,0,
+0,0,0,0,0,0,0,2,2,0,0,0,2,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,2,2,0,0,0,0,0,0,
+0,0,0,0,0,0,1,1,1,1,4,4,1,1,1,0,0,0,0,0,
+0,0,0,3,2,2,1,2,2,0,0,3,2,2,1,2,2,0,0,0,
+0,0,0,3,2,2,1,3,3,0,0,3,2,2,1,3,3,0,0,0,
+1,1,1,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,1,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0</data>
+  </layer>
+  <objectgroup id="3" name="Buildable zones" visible="0">
+    <object id="1" name="buildable 4,3" type="buildable" x="144" y="96" width="48" height="48" />
+    <object id="2" name="buildable 5,3" type="buildable" x="192" y="96" width="48" height="48" />
+    <object id="3" name="buildable 4,4" type="buildable" x="144" y="144" width="48" height="48" />
+    <object id="4" name="buildable 5,4" type="buildable" x="192" y="144" width="48" height="48" />
+    <object id="5" name="buildable 7,3" type="buildable" x="288" y="96" width="48" height="48" />
+    <object id="6" name="buildable 8,3" type="buildable" x="336" y="96" width="48" height="48" />
+    <object id="7" name="buildable 12,3" type="buildable" x="528" y="96" width="48" height="48" />
+    <object id="8" name="buildable 13,3" type="buildable" x="576" y="96" width="48" height="48" />
+    <object id="9" name="buildable 12,4" type="buildable" x="528" y="144" width="48" height="48" />
+    <object id="10" name="buildable 13,4" type="buildable" x="576" y="144" width="48" height="48" />
+    <object id="11" name="buildable 16,3" type="buildable" x="720" y="96" width="48" height="48" />
+    <object id="12" name="buildable 17,3" type="buildable" x="768" y="96" width="48" height="48" />
+    <object id="13" name="buildable 17,4" type="buildable" x="768" y="144" width="48" height="48" />
+    <object id="14" name="buildable 8,6" type="buildable" x="336" y="240" width="48" height="48" />
+    <object id="15" name="buildable 9,6" type="buildable" x="384" y="240" width="48" height="48" />
+    <object id="16" name="buildable 13,6" type="buildable" x="576" y="240" width="48" height="48" />
+    <object id="17" name="buildable 13,7" type="buildable" x="576" y="288" width="48" height="48" />
+    <object id="18" name="buildable 14,7" type="buildable" x="624" y="288" width="48" height="48" />
+    <object id="19" name="buildable 5,9" type="buildable" x="192" y="384" width="48" height="48" />
+    <object id="20" name="buildable 6,9" type="buildable" x="240" y="384" width="48" height="48" />
+    <object id="21" name="buildable 5,10" type="buildable" x="192" y="432" width="48" height="48" />
+    <object id="22" name="buildable 6,10" type="buildable" x="240" y="432" width="48" height="48" />
+    <object id="23" name="buildable 8,9" type="buildable" x="336" y="384" width="48" height="48" />
+    <object id="24" name="buildable 9,9" type="buildable" x="384" y="384" width="48" height="48" />
+    <object id="25" name="buildable 13,9" type="buildable" x="576" y="384" width="48" height="48" />
+    <object id="26" name="buildable 14,9" type="buildable" x="624" y="384" width="48" height="48" />
+    <object id="27" name="buildable 13,10" type="buildable" x="576" y="432" width="48" height="48" />
+    <object id="28" name="buildable 14,10" type="buildable" x="624" y="432" width="48" height="48" />
+    <object id="29" name="buildable 16,9" type="buildable" x="720" y="384" width="48" height="48" />
+    <object id="30" name="buildable 17,9" type="buildable" x="768" y="384" width="48" height="48" />
+  </objectgroup>
+  <objectgroup id="4" name="Sight blockers" visible="0">
+    <object id="31" name="blocker 3,3" type="blocker" x="96" y="96" width="48" height="48" />
+    <object id="32" name="blocker 3,4" type="blocker" x="96" y="144" width="48" height="48" />
+    <object id="33" name="blocker 7,4" type="blocker" x="288" y="144" width="48" height="48" />
+    <object id="34" name="blocker 8,4" type="blocker" x="336" y="144" width="48" height="48" />
+    <object id="35" name="blocker 11,3" type="blocker" x="480" y="96" width="48" height="48" />
+    <object id="36" name="blocker 11,4" type="blocker" x="480" y="144" width="48" height="48" />
+    <object id="37" name="blocker 16,4" type="blocker" x="720" y="144" width="48" height="48" />
+    <object id="38" name="blocker 16,5" type="blocker" x="720" y="192" width="48" height="48" />
+    <object id="39" name="blocker 4,9" type="blocker" x="144" y="384" width="48" height="48" />
+    <object id="40" name="blocker 4,10" type="blocker" x="144" y="432" width="48" height="48" />
+    <object id="41" name="blocker 8,10" type="blocker" x="336" y="432" width="48" height="48" />
+    <object id="42" name="blocker 9,10" type="blocker" x="384" y="432" width="48" height="48" />
+    <object id="43" name="blocker 12,9" type="blocker" x="528" y="384" width="48" height="48" />
+    <object id="44" name="blocker 12,10" type="blocker" x="528" y="432" width="48" height="48" />
+    <object id="45" name="blocker 16,10" type="blocker" x="720" y="432" width="48" height="48" />
+    <object id="46" name="blocker 17,10" type="blocker" x="768" y="432" width="48" height="48" />
+  </objectgroup>
+  <objectgroup id="5" name="Tunnel" visible="0">
+    <object id="47" name="tunnel 9,5" type="tunnel" x="384" y="192" width="48" height="48" />
+    <object id="48" name="tunnel 10,5" type="tunnel" x="432" y="192" width="48" height="48" />
+    <object id="49" name="tunnel 11,8" type="tunnel" x="480" y="336" width="48" height="48" />
+    <object id="50" name="tunnel 12,8" type="tunnel" x="528" y="336" width="48" height="48" />
+  </objectgroup>
+  <objectgroup id="6" name="Enemy route" visible="0">
+    <object id="51" name="Route 1" type="enemy_path" x="0" y="0">
+      <polyline points="24,72 72,72 120,72 168,72 216,72 264,72 264,120 264,168 264,216 312,216 360,216 408,216 456,216 504,216 552,216 600,216 648,216 648,168 648,120 648,72 696,72 744,72 792,72 840,72 888,72 936,72" />
+    </object>
+    <object id="54" name="Route 2" type="enemy_path" x="0" y="0">
+      <polyline points="24,504 72,504 120,504 168,504 216,504 264,504 312,504 312,456 312,408 312,360 360,360 408,360 456,360 504,360 552,360 600,360 648,360 696,360 696,408 696,456 696,504 744,504 792,504 840,504 888,504 936,504" />
+    </object>
+  </objectgroup>
+  <objectgroup id="7" name="Entrance and exit" visible="0">
+    <object id="52" name="entrance 1" type="entrance" x="24.0" y="72.0">
+      <point />
+    </object>
+    <object id="53" name="exit 1" type="exit" x="936.0" y="72.0">
+      <point />
+    </object>
+    <object id="55" name="entrance 2" type="entrance" x="24.0" y="504.0">
+      <point />
+    </object>
+    <object id="56" name="exit 2" type="exit" x="936.0" y="504.0">
+      <point />
+    </object>
+  </objectgroup>
+</map>

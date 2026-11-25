@@ -8,7 +8,24 @@
   21 sight-blocking ridge tiles and a two-tile untargetable tunnel.
   KARZ disappear while their centers are inside the connected tunnel and reappear at the exit;
   they continue moving underground. Ridge tiles block tower targeting across them.
-- Impossible retains a temporary Desert Highway placeholder until its dedicated map is approved.
+- **Caldera's Edge** is the final Extreme map, displayed and stored under the existing **Impossible**
+  difficulty identifier for account compatibility. Two separate 26-cell routes alternate spawns from
+  the existing shared wave budget. There are 30 build tiles, 16 sight blockers and two connected
+  two-cell tunnels; enemies disappear and cannot be targeted inside either tunnel.
+  Lava, sulfur, smoke and flames are static decoration, not extra obstacles or damage sources.
+  The approved artwork is shared by the selection thumbnail and gameplay.
+  This addition does not change money, prices, refunds, enemy statistics or wave counts; balance
+  tuning is deferred. The clear target remains wave 10. Old Impossible placeholder checkpoints
+  start a fresh run; new Caldera checkpoints carry a map identifier.
+
+`export_caldera_map.py` reproduces the approved editor grid and both TMX paths. It does not
+regenerate artwork. Pale ash ground marks build areas; **B** shows exact tile-based placement
+boundaries where decorative edges are softened. Fire animation is not included in this pass.
+
+**Draft art-alignment caveat:** the approved generated image is not yet pixel-aligned with all
+semantic tiles. The placement overlay exposes overlaps with scenic rocks and the lower-right
+road edge. Preserve the approved grid and correct the artwork before treating this map as
+release-ready; gameplay tests validate logic, not image alignment. Balance is also unvalidated.
 
 The selected map supplies its artwork, route, build zones, difficulty rules, and clear wave automatically.
 Sandbox mode continues indefinitely; the same post-clear behavior is intended for a future Freeplay option.
