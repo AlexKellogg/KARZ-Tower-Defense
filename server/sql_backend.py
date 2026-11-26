@@ -10,7 +10,7 @@ from sqlalchemy import (Boolean, Float, ForeignKey, Integer, LargeBinary, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 from sqlalchemy.pool import StaticPool
 
-from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, MODES, ROLES, AccessDenied, Account,
+from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, MODES, ROLES, AccessDenied, Account, ProfileStats,
                      AccountError, AccountSummary, Backend, LeaderboardEntry, achievement_ids, checkpoint_json,
                      unlocked_for)
 from local_backend import EMAIL_RE, MIN_PASSWORD, _hash
@@ -208,6 +208,17 @@ class SqlBackend(Backend):
                           kills=int(result.kills), played_at=_now()))
             db.commit()
             return tuple(name for name in self._unlocked(db, account.id) if name not in before)
+
+    def profile_stats(self, account):
+        with self._session() as db:
+            row = self._row(db, account.id)
+            played, wins, kills = db.execute(
+                select(func.count(RunRow.id), func.coalesce(func.sum(case((RunRow.won.is_(True), 1), else_=0)), 0),
+                       func.coalesce(func.sum(RunRow.kills), 0)).where(RunRow.account_id == account.id)).one()
+            best = dict(db.execute(
+                select(RunRow.difficulty, func.max(RunRow.score))
+                .where(RunRow.account_id == account.id, RunRow.mode == 'regular').group_by(RunRow.difficulty)).all())
+            return ProfileStats(max(best.values(), default=0), best, played, wins, kills, row.created_at or '')
 
     def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE, mode='regular'):
         if kind not in LEADERBOARD_KINDS:

@@ -116,6 +116,20 @@ class PostgresAchievementTests(PostgresFixture, contract.AchievementTests):
     pass
 
 
+class ServerProfileTests(ServerFixture, contract.ProfileTests):
+    pass
+
+
+@needs_postgres
+class PostgresProfileTests(PostgresFixture, contract.ProfileTests):
+    pass
+
+
+class SqlProfileTests(contract.ProfileTests):
+    def make_backend(self, folder):
+        return SqlBackend('sqlite://')
+
+
 class SqlAchievementTests(contract.AchievementTests):
     def make_backend(self, folder):
         return SqlBackend('sqlite://')

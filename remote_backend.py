@@ -5,7 +5,7 @@ from pathlib import Path
 import httpx
 
 from backend import (LEADERBOARD_SIZE, AccessDenied, Account, AccountError, AccountSummary, Backend,
-                     LeaderboardEntry, RunResult, ScoreQueued)
+                     LeaderboardEntry, ProfileStats, RunResult, ScoreQueued)
 
 OFFLINE = "Can't reach the KARZ server. Check your connection and try again."
 QUEUED = 'Server unreachable. Your score is saved on this computer and will upload when you are back online.'
@@ -165,6 +165,10 @@ class RemoteBackend(Backend):
             self._save_pending(self._load_pending()+[
                 {'server': self.base_url, 'account_id': account.id, 'result': asdict(result)}])
             raise ScoreQueued(QUEUED if isinstance(e, Offline) else EXPIRED) from None
+
+    def profile_stats(self, account):
+        self._flush(account)
+        return ProfileStats(**self._call('GET', '/me/stats', account))
 
     def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE, mode='regular'):
         params = {'limit': limit, 'mode': mode}

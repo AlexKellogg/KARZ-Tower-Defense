@@ -318,6 +318,35 @@ class AchievementTests(BackendTestCase):
         self.assertEqual(self.backend.load_checkpoint(self.zlata, 'Medium', 'regular')['wave'], 2)
 
 
+class ProfileTests(BackendTestCase):
+    def test_new_account_has_empty_stats(self):
+        stats = self.backend.profile_stats(self.zlata)
+        self.assertEqual((stats.best_score, stats.best_by_difficulty, stats.games_played, stats.wins, stats.total_kills),
+                         (0, {}, 0, 0, 0))
+        self.assertRegex(stats.joined, r'^\d{4}-\d{2}-\d{2}')
+
+    def test_stats_count_games_wins_kills_and_best_scores(self):
+        self.backend.record_run(self.zlata, run('Easy', score=300))
+        self.backend.record_run(self.zlata, run('Easy', won=False, score=700))
+        self.backend.record_run(self.zlata, run('Medium', score=500))
+        stats = self.backend.profile_stats(self.zlata)
+        self.assertEqual(stats.best_score, 700)
+        self.assertEqual(stats.best_by_difficulty, {'Easy': 700, 'Medium': 500})
+        self.assertEqual((stats.games_played, stats.wins, stats.total_kills), (3, 2, 30))
+
+    def test_sandbox_games_count_as_played_but_not_for_best_score(self):
+        self.backend.record_run(self.zlata, run('Easy', score=200))
+        self.backend.record_run(self.zlata, RunResult('Easy', True, 9999, 300.0, 0, 20, 80, sandbox=True))
+        stats = self.backend.profile_stats(self.zlata)
+        self.assertEqual((stats.best_score, stats.best_by_difficulty), (200, {'Easy': 200}))
+        self.assertEqual((stats.games_played, stats.wins), (2, 1))
+
+    def test_players_only_see_their_own_stats(self):
+        reagan = self.backend.sign_up('Reagan', 'reagan', 'reagan@example.com', 'password123')
+        self.backend.record_run(self.zlata, run('Easy', score=800))
+        self.assertEqual(self.backend.profile_stats(reagan).games_played, 0)
+
+
 class MigrationTests(unittest.TestCase):
     def test_old_database_from_the_previous_version_still_works(self):
         with tempfile.TemporaryDirectory() as tmp:

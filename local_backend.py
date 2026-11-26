@@ -8,7 +8,7 @@ from pathlib import Path
 
 import json
 
-from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, MODES, ROLES, AccessDenied, Account,
+from backend import (DIFFICULTY_NAMES, LEADERBOARD_KINDS, LEADERBOARD_SIZE, MODES, ROLES, AccessDenied, Account, ProfileStats,
                      AccountError, AccountSummary, Backend, LeaderboardEntry, achievement_ids, checkpoint_json,
                      unlocked_for)
 
@@ -161,6 +161,17 @@ class LocalBackend(Backend):
              result.mode))
         self.db.commit()
         return tuple(name for name in self.unlocked_difficulties(account) if name not in before)
+
+    def profile_stats(self, account):
+        self._get(account.id)
+        played, wins, kills = self.db.execute(
+            'SELECT COUNT(id), COALESCE(SUM(won), 0), COALESCE(SUM(kills), 0) FROM runs WHERE account_id = ?',
+            (account.id,)).fetchone()
+        best = dict(self.db.execute(
+            "SELECT difficulty, MAX(score) FROM runs WHERE account_id = ? AND mode = 'regular' GROUP BY difficulty",
+            (account.id,)).fetchall())
+        joined = self.db.execute('SELECT created_at FROM accounts WHERE id = ?', (account.id,)).fetchone()[0]
+        return ProfileStats(max(best.values(), default=0), best, played, wins, kills, joined or '')
 
     def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE, mode='regular'):
         if kind not in LEADERBOARD_KINDS:
