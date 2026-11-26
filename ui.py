@@ -15,9 +15,13 @@ MUTED = (146, 112, 72)
 PAPER = (255, 250, 240)
 PAPER_HOVER = (250, 236, 210)
 PAPER_EDGE = (226, 202, 160)
-FIELD = (78, 110, 178)
-FIELD_FOCUS = (58, 88, 156)
-FIELD_HINT = (214, 226, 248)
+FIELD = (255, 253, 248)
+FIELD_FOCUS = (255, 255, 255)
+FIELD_HINT = (176, 156, 128)
+FIELD_EDGE = (230, 214, 186)
+CLASSIC_FIELD = (78, 110, 178)
+CLASSIC_FIELD_FOCUS = (58, 88, 156)
+CLASSIC_FIELD_HINT = (214, 226, 248)
 BUTTON = (30, 50, 104)
 BUTTON_HOVER = (44, 70, 138)
 GOLD_TEXT = (255, 214, 120)
@@ -232,13 +236,13 @@ def _soft_shadow(size, radius, spread, alpha=80):
     return pygame.transform.smoothscale(small, (w, h))
 
 
-def card(surface, rect, radius=14):
+def card(surface, rect, radius=16):
     r = scaled(rect)
     surface.blit(_soft_shadow(r.size, px(radius), px(18)), (r.x-px(18), r.y-px(10)))
     rounded(surface, rect, PAPER, radius)
 
 
-def card_with_art(surface, rect, art_height, radius=14):
+def card_with_art(surface, rect, art_height, radius=16):
     card(surface, rect, radius)
     r = scaled(rect)
     h = px(art_height)
@@ -251,17 +255,18 @@ def card_with_art(surface, rect, art_height, radius=14):
 
 
 def chip(surface, label, color, pos, anchor='topleft'):
-    width = round(text_width(label, 11, True))+len(label)*2+20
-    rect = pygame.Rect(0, 0, width, 22)
+    width = round(text_width(label, 10, True))+len(label)+18
+    rect = pygame.Rect(0, 0, width, 20)
     setattr(rect, anchor, pos)
-    rounded(surface, rect, color, 11)
-    text(surface, label, 11, WHITE, rect.center, bold=True, anchor='center', tracking=2)
+    rounded(surface, rect, color, 10)
+    text(surface, label, 10, WHITE, rect.center, bold=True, anchor='center', tracking=1)
     return rect
 
 
 class TextInput:
-    def __init__(self, rect, placeholder, icon_name, secret=False, value=''):
+    def __init__(self, rect, placeholder, icon_name, secret=False, value='', classic=False):
         self.rect = pygame.Rect(rect)
+        self.classic = classic
         self.placeholder = placeholder
         self.icon_name = icon_name
         self.secret = secret
@@ -290,18 +295,27 @@ class TextInput:
 
     def draw(self, surface):
         r = self.rect
-        rounded(surface, r, FIELD_FOCUS if self.focused else FIELD, r.h//2)
-        icon(surface, self.icon_name, WHITE, 16, (r.x+24, r.centery))
+        if self.classic:
+            rounded(surface, r, CLASSIC_FIELD_FOCUS if self.focused else CLASSIC_FIELD, r.h//2)
+            icon(surface, self.icon_name, WHITE, 16, (r.x+24, r.centery))
+        elif self.focused:
+            rounded(surface, r.inflate(6, 6), (*BUTTON, 40), 13)
+            rounded(surface, r, FIELD_FOCUS, 10, BUTTON, 2)
+        else:
+            rounded(surface, r, FIELD, 10, FIELD_EDGE, 1)
+        if not self.classic:
+            icon(surface, self.icon_name, BUTTON if self.focused else FIELD_HINT, 16, (r.x+24, r.centery))
         x0, right = px(r.x+44), px(r.right-18)
         width = right-x0
         shown = '•'*len(self.value) if self.secret and not self.reveal else self.value
-        image = font(15).render(shown or self.placeholder, True, WHITE if shown else FIELD_HINT)
+        text_color, hint, caret = (WHITE, CLASSIC_FIELD_HINT, WHITE) if self.classic else (NAVY, FIELD_HINT, BUTTON)
+        image = font(15).render(shown or self.placeholder, True, text_color if shown else hint)
         offset = max(0, image.get_width()-width) if shown else 0
         cy = px(r.centery)
         surface.blit(image, (x0, cy-image.get_height()//2), (offset, 0, width, image.get_height()))
         if self.focused and self.blink < 0.55:
             cx = x0+min(image.get_width() if shown else 0, width)+px(1)
-            pygame.draw.line(surface, WHITE, (cx, cy-px(9)), (cx, cy+px(9)), max(1, px(2)))
+            pygame.draw.line(surface, caret, (cx, cy-px(9)), (cx, cy+px(9)), max(1, px(2)))
 
 
 class Button:
@@ -318,23 +332,26 @@ class Button:
         r = self.rect
         if hover is None:
             hover = r.collidepoint(mouse_pos())
-        size, tracking = (14, 2) if r.w >= 110 else (12, 1)
+        size = 15 if r.w >= 110 else 13
         if self.style == 'primary':
+            rounded(surface, r, BUTTON_HOVER if hover else BUTTON, 10)
+            text(surface, self.label, size, WHITE, r.center, bold=True, anchor='center')
+        elif self.style == 'classic':
             rounded(surface, r, BUTTON_HOVER if hover else BUTTON, 8)
-            text(surface, self.label.upper(), size, WHITE, r.center, bold=True, anchor='center', tracking=tracking)
+            text(surface, self.label.upper(), 14, WHITE, r.center, bold=True, anchor='center', tracking=2)
         elif self.style == 'hero':
-            rounded(surface, r.move(0, 4), (16, 28, 64), r.h//2)
+            rounded(surface, r.move(0, 6).inflate(-12, 0), (16, 28, 64, 60), r.h//2)
             rounded(surface, r, BUTTON_HOVER if hover else BUTTON, r.h//2)
-            text(surface, self.label.upper(), 22, GOLD_TEXT, r.center, bold=True, anchor='center', tracking=5)
+            text(surface, self.label.upper(), 22, GOLD_TEXT, r.center, bold=True, anchor='center', tracking=6)
         elif self.style == 'ghost':
             rounded(surface, r, (255, 255, 255, 150 if hover else 90), r.h//2, (*ON_BG, 70), 1)
             icon(surface, self.icon_name, ON_BG, 20, r.center)
         elif self.style == 'secondary':
-            rounded(surface, r, PAPER_HOVER if hover else PAPER, 8, PAPER_EDGE, 1)
-            text(surface, self.label.upper(), size, INK, r.center, bold=True, anchor='center', tracking=tracking)
+            rounded(surface, r, (255, 255, 255) if hover else (255, 252, 246), 10, FIELD_EDGE, 1)
+            text(surface, self.label, size, NAVY, r.center, bold=True, anchor='center')
         elif self.style == 'disabled':
-            rounded(surface, r, (236, 230, 220), 8, (222, 212, 196), 1)
-            text(surface, self.label.upper(), 14, (170, 156, 136), r.center, bold=True, anchor='center', tracking=2)
+            rounded(surface, r, (238, 232, 222), 10)
+            text(surface, self.label, size, (170, 156, 136), r.center, bold=True, anchor='center')
         elif self.style == 'small':
             rounded(surface, r, PAPER_HOVER if hover else PAPER, r.h//2, PAPER_EDGE, 1)
             text(surface, self.label, 12, BUTTON, r.center, bold=True, anchor='center')

@@ -136,6 +136,10 @@ def create_app(backend=None):
     def record_run(body: RunBody, account=Depends(current_account)):
         return {'unlocked': list(backend.record_run(account, RunResult(**body.model_dump())))}
 
+    @app.get('/me/stats')
+    def stats(account=Depends(current_account)):
+        return asdict(backend.profile_stats(account))
+
     @app.get('/leaderboard/{kind}')
     def leaderboard(kind: str, difficulty: Optional[str] = None, limit: int = Query(LEADERBOARD_SIZE, ge=1, le=100),
                     mode: str = Query('regular', max_length=10)):

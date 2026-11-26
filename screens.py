@@ -81,11 +81,11 @@ class App:
 class LoginScreen:
     def __init__(self, app):
         self.app = app
-        self.email = TextInput((350, 330, 260, 42), 'Email', 'mail')
-        self.password = TextInput((350, 384, 260, 42), 'Password', 'lock', secret=True)
+        self.email = TextInput((350, 330, 260, 42), 'Email', 'mail', classic=True)
+        self.password = TextInput((350, 384, 260, 42), 'Password', 'lock', secret=True, classic=True)
         self.form = Form([self.email, self.password])
         self.show = Toggle((352, 440), 'Show password')
-        self.submit = Button((350, 488, 260, 44), 'Log in')
+        self.submit = Button((350, 488, 260, 44), 'Log in', 'classic')
         self.switch = Button((350, 550, 260, 24), 'New here? Create an account', 'link')
         self.error = ''
         self.email.focused = True
@@ -112,7 +112,7 @@ class LoginScreen:
 
     def draw(self, screen):
         ui.background(screen)
-        ui.card_with_art(screen, (310, 36, 340, 568), 200)
+        ui.card_with_art(screen, (310, 36, 340, 568), 200, 14)
         ui.text(screen, 'KARZ', 40, ui.WHITE, (480, 92), bold=True, anchor='center', tracking=10)
         ui.text(screen, 'TOWER DEFENSE', 11, (255, 246, 226), (480, 124), anchor='center', tracking=4)
         ui.text(screen, 'Welcome back', 26, ui.NAVY, (350, 260), bold=True)
@@ -129,14 +129,14 @@ class SignUpScreen:
     def __init__(self, app):
         self.app = app
         self.fields = [
-            TextInput((350, 240, 260, 42), 'Name', 'user'),
-            TextInput((350, 292, 260, 42), 'Username', 'at'),
-            TextInput((350, 344, 260, 42), 'Email', 'mail'),
-            TextInput((350, 396, 260, 42), 'Password (8+ characters)', 'lock', secret=True),
+            TextInput((350, 240, 260, 42), 'Name', 'user', classic=True),
+            TextInput((350, 292, 260, 42), 'Username', 'at', classic=True),
+            TextInput((350, 344, 260, 42), 'Email', 'mail', classic=True),
+            TextInput((350, 396, 260, 42), 'Password (8+ characters)', 'lock', secret=True, classic=True),
         ]
         self.form = Form(self.fields)
         self.show = Toggle((352, 452), 'Show password')
-        self.submit = Button((350, 506, 260, 44), 'Sign up')
+        self.submit = Button((350, 506, 260, 44), 'Sign up', 'classic')
         self.switch = Button((350, 562, 260, 24), 'Already have an account? Log in', 'link')
         self.error = ''
         self.fields[0].focused = True
@@ -164,7 +164,7 @@ class SignUpScreen:
 
     def draw(self, screen):
         ui.background(screen)
-        ui.card_with_art(screen, (310, 36, 340, 568), 112)
+        ui.card_with_art(screen, (310, 36, 340, 568), 112, 14)
         ui.text(screen, 'KARZ', 30, ui.WHITE, (480, 84), bold=True, anchor='center', tracking=8)
         ui.text(screen, 'Create account', 26, ui.NAVY, (350, 170), bold=True)
         ui.text(screen, 'Save your progress across devices.', 13, ui.MUTED, (350, 206))
@@ -180,14 +180,17 @@ class HomeScreen:
     def __init__(self, app):
         self.app = app
         self.settings = Button((888, 22, 46, 46), '', 'ghost', 'gear')
-        self.play = Button((370, 312, 220, 64), 'Play', 'hero')
-        self.leaderboard = Button((370, 396, 220, 44), 'Leaderboard', 'secondary')
-        self.achievements = Button((370, 452, 220, 44), 'Achievements', 'secondary')
-        self.accounts = Button((370, 508, 220, 44), 'All accounts', 'secondary') if app.account.is_admin else None
+        self.profile = Button((830, 22, 46, 46), '', 'ghost', 'user')
+        self.play = Button((350, 312, 260, 64), 'Play', 'hero')
+        self.leaderboard = Button((350, 396, 126, 44), 'Leaderboard', 'secondary')
+        self.achievements = Button((484, 396, 126, 44), 'Achievements', 'secondary')
+        self.accounts = Button((350, 452, 260, 44), 'All accounts', 'secondary') if app.account.is_admin else None
 
     def handle(self, event):
         if self.settings.clicked(event):
             self.app.go(SettingsScreen(self.app))
+        elif self.profile.clicked(event):
+            self.app.go(ProfileScreen(self.app))
         elif self.play.clicked(event) or pressed_enter(event):
             self.app.go(MapSelectScreen(self.app))
         elif self.leaderboard.clicked(event):
@@ -209,7 +212,7 @@ class HomeScreen:
         ui.text(screen, 'KARZ', 84, ui.ON_BG, (480, 194), bold=True, anchor='center', tracking=22)
         ui.text(screen, 'TOWER DEFENSE', 16, ui.ON_BG_SOFT, (480, 252), anchor='center', tracking=8)
         hover = None if interactive else False
-        for button in (self.settings, self.play, self.leaderboard, self.achievements, self.accounts):
+        for button in (self.settings, self.profile, self.play, self.leaderboard, self.achievements, self.accounts):
             if button is not None:
                 button.draw(screen, hover)
 
@@ -564,7 +567,7 @@ class AchievementsScreen:
             got = achievement.id in self.unlocked
             ui.card(screen, rect, 12)
             if not got:
-                ui.rounded(screen, rect, (236, 230, 220, 150), 12)
+                ui.rounded(screen, rect, (246, 240, 230, 110), 12)
             center = (rect.x+44, rect.centery)
             ui.circle(screen, center, 26, self.GOLD if got else self.LOCKED)
             ui.icon(screen, 'star' if got else 'lock', ui.BUTTON if got else (130, 120, 106), 26, center)
@@ -573,6 +576,92 @@ class AchievementsScreen:
             status = f'Unlocked {self.unlocked[achievement.id][:10]}' if got else 'Locked'
             ui.text(screen, status, 11, ui.SUCCESS if got else ui.MUTED, (rect.x+86, rect.y+64), bold=got)
 
+
+def format_joined(created_at):
+    try:
+        year, month, day = (int(part) for part in created_at[:10].split('-'))
+    except ValueError:
+        return ''
+    months = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
+    return f'{months[month-1]} {day}, {year}' if 1 <= month <= 12 else ''
+
+
+class ProfileScreen:
+    GOLD = (255, 214, 120)
+    LOCKED = (196, 186, 170)
+
+    def __init__(self, app):
+        self.app = app
+        self.back = Button((24, 22, 46, 46), '', 'ghost', 'back')
+        self.edit = Button((660, 152, 100, 22), 'Edit account', 'link')
+        self.error = ''
+        self.stats, self.unlocked, self.open_levels = None, {}, DIFFICULTY_NAMES
+        try:
+            self.stats = self.app.backend.profile_stats(self.app.account)
+            self.unlocked = self.app.backend.achievements(self.app.account)
+            self.open_levels = self.app.backend.unlocked_difficulties(self.app.account)
+        except (AccountError, AccessDenied) as e:
+            self.error = str(e)
+
+    def handle(self, event):
+        if self.back.clicked(event) or pressed_escape(event):
+            self.app.go(HomeScreen(self.app))
+        elif self.edit.clicked(event):
+            self.app.go(SettingsScreen(self.app))
+
+    def update(self, dt):
+        pass
+
+    def draw(self, screen):
+        account = self.app.account
+        ui.background(screen)
+        self.back.draw(screen)
+        ui.card_with_art(screen, (160, 36, 640, 568), 88)
+        name = ui.text(screen, account.name, 26, ui.NAVY, (200, 148), bold=True)
+        if account.is_admin:
+            ui.chip(screen, 'ADMIN', ui.BUTTON, (name.right/ui.S+10, 155))
+        details = [f'@{account.username}', account.email]
+        if self.stats and format_joined(self.stats.joined):
+            details.append(f'Joined {format_joined(self.stats.joined)}')
+        ui.text(screen, '  ·  '.join(details), 13, ui.MUTED, (200, 186))
+        self.edit.draw(screen)
+        if self.stats is None:
+            ui.text(screen, self.error or 'Profile unavailable.', 15, ui.ERROR, (480, 400), anchor='center')
+            return
+
+        numbers = ((f'{self.stats.best_score:,}', 'Best score'), (f'{self.stats.games_played:,}', 'Games'),
+                   (f'{self.stats.wins:,}', 'Wins'), (f'{self.stats.total_kills:,}', 'Kills'))
+        for i, (value, label) in enumerate(numbers):
+            x = 200+i*142
+            ui.text(screen, value, 28, ui.NAVY, (x, 230), bold=True)
+            ui.text(screen, label.upper(), 10, ui.MUTED, (x, 266), bold=True, tracking=1)
+
+        ui.text(screen, 'BEST SCORES', 10, ui.MUTED, (200, 312), bold=True, tracking=1)
+        for i, difficulty in enumerate(DIFFICULTY_NAMES):
+            box = pygame.Rect(200+i*142, 334, 134, 64)
+            color = DIFFICULTY_STYLE[difficulty][0]
+            best = self.stats.best_by_difficulty.get(difficulty)
+            ui.rounded(screen, box, (246, 238, 222), 10)
+            ui.circle(screen, (box.x+18, box.y+20), 4, color)
+            ui.text(screen, difficulty, 12, color, (box.x+28, box.y+20), bold=True, anchor='midleft')
+            if best is not None:
+                ui.text(screen, f'{best:,}', 18, ui.NAVY, (box.x+14, box.y+44), bold=True, anchor='midleft')
+            else:
+                label = '—' if difficulty in self.open_levels else 'Locked'
+                ui.text(screen, label, 13, ui.MUTED, (box.x+14, box.y+44), anchor='midleft')
+
+        done = sum(a.id in self.unlocked for a in ACHIEVEMENTS)
+        ui.text(screen, 'ACHIEVEMENTS', 10, ui.MUTED, (200, 428), bold=True, tracking=1)
+        ui.text(screen, f'{done} of {len(ACHIEVEMENTS)}', 12, ui.MUTED, (760, 427), anchor='topright')
+        for i, achievement in enumerate(ACHIEVEMENTS):
+            col, row = i % 2, i//2
+            x, y = 200+col*290, 464+row*34
+            got = achievement.id in self.unlocked
+            ui.circle(screen, (x+10, y), 10, self.GOLD if got else (236, 228, 214))
+            ui.icon(screen, 'star' if got else 'lock', ui.BUTTON if got else (176, 164, 146), 11, (x+10, y))
+            ui.text(screen, achievement.name, 13, ui.NAVY if got else (176, 164, 146), (x+28, y), bold=got, anchor='midleft')
+            if got:
+                ui.text(screen, format_joined(self.unlocked[achievement.id]), 11, ui.MUTED, (x+270, y), anchor='midright')
 
 class AdminScreen:
     ROW = 30

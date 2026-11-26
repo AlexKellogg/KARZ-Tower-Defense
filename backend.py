@@ -63,6 +63,16 @@ class AccountSummary:
 
 
 @dataclass(frozen=True)
+class ProfileStats:
+    best_score: int
+    best_by_difficulty: dict
+    games_played: int
+    wins: int
+    total_kills: int
+    joined: str
+
+
+@dataclass(frozen=True)
 class LeaderboardEntry:
     rank: int
     username: str
@@ -142,6 +152,10 @@ class Backend(ABC):
     @abstractmethod
     def record_run(self, account, result):
         """Saves a finished game. Returns the names of difficulties newly unlocked by it. Raises AccessDenied."""
+
+    @abstractmethod
+    def profile_stats(self, account):
+        """Returns ProfileStats for this account. Best scores count regular games only; games played counts both modes."""
 
     @abstractmethod
     def leaderboard(self, kind, difficulty=None, limit=LEADERBOARD_SIZE, mode='regular'):

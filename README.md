@@ -76,6 +76,13 @@ On macOS, use `python3 -m venv .venv`, then `.venv/bin/python` in place of `.\.v
 
 Between waves, the top banner previews the next wave (enemy count and HP). During a wave, the chip in the top-right corner shows what is coming next. Speed-ups run the simulation in extra steps, so the in-game timer counts game time and the time leaderboard stays fair.
 
+## Profile
+
+Click the person icon in the top-right of the home screen to open your **Profile**. It shows your name, username,
+email, role (Player or Admin) and join date, plus your best score, games played, wins and total kills, your best
+score on each map (regular games only), and every achievement with the date you unlocked it.
+**Edit account** opens the account settings. With the server, the stats come from `GET /me/stats`.
+
 ## Achievements
 
 Open **Achievements** from the home screen to see all eight, which ones you have, and when you unlocked them.

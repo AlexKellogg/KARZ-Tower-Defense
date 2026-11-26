@@ -18,8 +18,8 @@ def main():
     from backend import RunResult
     from game_screen import DIFFICULTIES
     from local_backend import LocalBackend
-    from screens import (AchievementsScreen, AdminScreen, App, HomeScreen, LeaderboardScreen, MapSelectScreen, SettingsScreen,
-                         SignUpScreen)
+    from screens import (AchievementsScreen, AdminScreen, App, HomeScreen, LeaderboardScreen, MapSelectScreen, ProfileScreen,
+                         SettingsScreen, SignUpScreen)
     pygame.init()
     try:
         if args.smoke:
@@ -32,7 +32,7 @@ def main():
                 app.account = backend.sign_up('Smoke Test', 'smoke', 'smoke@example.com', 'password123')
                 backend.record_run(app.account, RunResult('Easy', True, 900, 140.0, 2, 5, 60))
                 backend.unlock_achievements(app.account, ['first_win', 'builder'])
-                for screen in (HomeScreen, SettingsScreen, MapSelectScreen, LeaderboardScreen, AchievementsScreen):
+                for screen in (HomeScreen, SettingsScreen, ProfileScreen, MapSelectScreen, LeaderboardScreen, AchievementsScreen):
                     app.go(screen(app))
                     app.run(frames=3)
                 app.play(DIFFICULTIES[0])
@@ -40,7 +40,7 @@ def main():
                 app.play(DIFFICULTIES[0], sandbox=True)
                 app.run(frames=30)
                 app.account = backend.promote_by_email('smoke@example.com')
-                for screen in (HomeScreen, AdminScreen, MapSelectScreen):
+                for screen in (HomeScreen, AdminScreen, ProfileScreen, MapSelectScreen):
                     app.go(screen(app))
                     app.run(frames=3)
                 for difficulty in DIFFICULTIES[1:]:
