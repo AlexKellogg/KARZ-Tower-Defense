@@ -4,3 +4,5 @@ __pycache__/
 .deps/
 *.zip
 karz_server.db
+.playtest-data/
+.test-temp/

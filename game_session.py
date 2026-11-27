@@ -14,6 +14,8 @@ HP_PER_WAVE = 4
 BASE_SPEED = 80
 POINTS_PER_KILL = 10
 MONEY_PER_KILL = 5
+WAVE_CLEAR_BONUS = 20
+STARTING_CASH = {'Easy':150, 'Medium':150, 'Hard':180, 'Impossible':200}
 POINTS_PER_LIFE_LEFT = 25
 SPEEDS = (1, 2, 3)
 
@@ -38,8 +40,8 @@ class DifficultyRules:
 RULES = {
     'Easy': DifficultyRules(1.0, 1.0, 1.0, 5),
     'Medium': DifficultyRules(1.4, 1.1, 1.5, 7),
-    'Hard': DifficultyRules(1.9, 1.2, 2.0, 10),
-    'Impossible': DifficultyRules(2.6, 1.35, 3.0, 10),
+    'Hard': DifficultyRules(1.6, 1.1, 2.0, 10),
+    'Impossible': DifficultyRules(1.6, 1.1, 3.0, 10),
 }
 
 
@@ -53,11 +55,12 @@ def format_time(seconds):
 
 
 class GameSession:
-    def __init__(self, difficulty, sandbox=False):
+    def __init__(self, difficulty, sandbox=False, manual_start=False):
         self.difficulty = difficulty
         self.sandbox = sandbox
         self.rules = RULES[difficulty]
-        self.economy = Economy(sandbox=sandbox)
+        self.economy = Economy(sandbox=sandbox,starting_money=STARTING_CASH[difficulty])
+        self.awaiting_start = manual_start
         self.clear_wave = self.rules.clear_wave
         self.lives = STARTING_LIVES
         self.wave = 0
@@ -83,12 +86,20 @@ class GameSession:
         session.elapsed = float(state['elapsed'])
         if not sandbox:
             session.economy.money = int(state['money'])
+            session.economy.earned = int(state.get('earned',0))
+            session.economy.spent = int(state.get('spent',0))
         session.break_timer = WAVE_BREAK
         return session
 
     def snapshot(self):
         return {'version': CHECKPOINT_VERSION, 'wave': self.waves_cleared, 'lives': self.lives, 'kills': self.kills,
-                'leaked': self.leaked, 'money': self.economy.money, 'elapsed': round(self.elapsed, 2)}
+                'leaked': self.leaked, 'money': self.economy.money, 'elapsed': round(self.elapsed, 2),
+                'earned':self.economy.earned, 'spent':self.economy.spent}
+
+    def start_first_wave(self):
+        if self.awaiting_start and not self.finished:
+            self.awaiting_start = False
+            self.break_timer = 0.0
 
     @property
     def finished(self):
@@ -111,7 +122,7 @@ class GameSession:
         return WavePreview(upcoming, wave_size(upcoming), hp, speed)
 
     def update(self, dt, enemies_alive):
-        if self.finished:
+        if self.finished or self.awaiting_start:
             return []
         self.elapsed += dt
         spawns = []
@@ -124,6 +135,9 @@ class GameSession:
         elif enemies_alive == 0:
             if self.wave > self.waves_cleared:
                 self.waves_cleared = self.wave
+                if not self.sandbox:
+                    # Completion grants recovery money, not kill-earned achievement progress.
+                    self.economy.money += WAVE_CLEAR_BONUS
                 self.break_timer = WAVE_BREAK
                 if not self.sandbox and self.waves_cleared == self.clear_wave:
                     self.status = 'won'
@@ -141,6 +155,7 @@ class GameSession:
             self.economy.earn(MONEY_PER_KILL)
 
     def skip_break(self):
+        self.start_first_wave()
         if self.between_waves:
             self.break_timer = 0.0
 

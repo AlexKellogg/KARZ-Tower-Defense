@@ -42,8 +42,11 @@ class Economy:
 
     @staticmethod
     def upgrade_cost(tower):
-        return UPGRADE_COSTS[tower.level] if tower.can_upgrade else None
+        costs = tower.spec.upgrade_costs if hasattr(tower,'spec') else UPGRADE_COSTS
+        return costs[tower.level] if tower.can_upgrade else None
 
     @staticmethod
     def tower_refund(tower):
+        if hasattr(tower,'spec'):
+            return tower.spec.cost + sum(tower.spec.upgrade_costs[:tower.level])
         return TOWER_COST + sum(UPGRADE_COSTS[:tower.level])
