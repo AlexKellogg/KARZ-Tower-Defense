@@ -60,7 +60,8 @@ class App:
         except (AccountError, AccessDenied):
             known = {}
         self.go(GameScreen(difficulty, on_exit=lambda: self.go(MapSelectScreen(self)), on_finish=record, sandbox=sandbox,
-                           on_checkpoint=checkpoint, resume=resume, on_achievements=unlock, achievements=known))
+                           on_checkpoint=checkpoint, resume=resume, on_achievements=unlock, achievements=known,
+                           manual_start=True))
 
     def run(self, frames=None):
         count = 0

@@ -54,8 +54,8 @@ class CalderaTests(unittest.TestCase):
             g.step(.8)
         self.assertEqual(len(g.enemies),wave_size(1))
         self.assertEqual([e.waypoints for e in g.enemies],[g.map.routes[i%2] for i in range(8)])
-        self.assertEqual(g.session.economy.money,150)
-        self.assertEqual((g.enemies[0].max_hp,g.enemies[0].speed),(62,108))
+        self.assertEqual(g.session.economy.money,200)
+        self.assertEqual((g.enemies[0].max_hp,g.enemies[0].speed),(38,88))
 
     def test_checkpoint_rejects_placeholder_and_accepts_current(self):
         state=dict(version=1,wave=1,lives=20,kills=8,leaked=0,money=190,elapsed=20,towers=[])

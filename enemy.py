@@ -16,6 +16,15 @@ class PlaceholderEnemy:
         self.reward = reward
         self.progress = 0.0
         self.reached_end = False
+        self.slow_factor = 1.0
+        self.slow_remaining = 0.0
+
+    def apply_slow(self, factor, duration):
+        # Strongest effect wins; equal-strength hits refresh, never multiply slows.
+        if self.slow_remaining <= 0 or factor < self.slow_factor:
+            self.slow_factor, self.slow_remaining = factor, duration
+        elif factor == self.slow_factor:
+            self.slow_remaining = max(self.slow_remaining,duration)
 
     @property
     def alive(self):
@@ -34,7 +43,12 @@ class PlaceholderEnemy:
     def update(self, dt):
         if not self.alive:
             return
-        self.progress = min(self.total, self.progress+self.speed*dt)
+        slowed = min(dt,self.slow_remaining)
+        distance = self.speed*(slowed*self.slow_factor+dt-slowed)
+        self.slow_remaining = max(0.0,self.slow_remaining-dt)
+        if self.slow_remaining == 0:
+            self.slow_factor = 1.0
+        self.progress = min(self.total, self.progress+distance)
         if self.progress >= self.total:
             self.reached_end = True
 
@@ -43,4 +57,4 @@ class PlaceholderEnemy:
             return False
         self.hp = max(0, self.hp-amount)
         return self.hp == 0
-    
+

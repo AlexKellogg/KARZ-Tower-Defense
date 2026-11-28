@@ -16,6 +16,7 @@ STRONG_SPOTS = ((150, 250), (230, 180), (300, 250), (120, 330), (60, 150))
 
 
 def play_until(screen, waves, limit=900):
+    screen.session.start_first_wave()
     t = 0.0
     while screen.session.waves_cleared < waves and screen.result is None and t < limit:
         screen.update(0.05)

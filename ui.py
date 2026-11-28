@@ -5,7 +5,7 @@ import pygame
 
 from scenery import desert_scene
 
-WIDTH, HEIGHT = 960, 640
+WIDTH, HEIGHT = 960, 780
 SS = 2
 S = 1.0
 

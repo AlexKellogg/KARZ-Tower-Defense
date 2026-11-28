@@ -94,11 +94,17 @@ def checkpoint_json(difficulty, mode, state):
     if not isinstance(towers, list) or len(towers) > MAX_CHECKPOINT_TOWERS:
         raise invalid
     for tower in towers:
-        if not isinstance(tower, dict) or set(tower) != {'x', 'y', 'level'}:
+        if not isinstance(tower, dict) or not {'x','y','level'} <= set(tower) or set(tower)-{'x','y','level','type'}:
             raise invalid
-        if not all(isinstance(tower[k], Real) and not isinstance(tower[k], bool) for k in tower):
+        if tower.get('type','cannon') not in ('cannon','cryo','mortar'):
+            raise invalid
+        if not all(isinstance(tower[k], Real) and not isinstance(tower[k], bool) for k in ('x','y','level')):
             raise invalid
         if not (0 <= tower['x'] <= 960 and 0 <= tower['y'] <= 576 and 0 <= tower['level'] <= 10):
+            raise invalid
+    for key in ('earned','spent'):
+        value = state.get(key,0)
+        if isinstance(value,bool) or not isinstance(value,int) or not 0 <= value <= 10**9:
             raise invalid
     text = json.dumps(state, sort_keys=True)
     if len(text) > MAX_CHECKPOINT_BYTES:

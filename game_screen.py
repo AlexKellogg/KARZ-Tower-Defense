@@ -5,12 +5,11 @@ import pygame
 
 import ui
 from achievements import AchievementTracker
-from economy import TOWER_COST
 from backend import DIFFICULTY_NAMES, ScoreQueued
 from enemy import PlaceholderEnemy
-from game_session import GameClock, GameSession, format_time
+from game_session import GameClock, GameSession, WAVE_CLEAR_BONUS, format_time
 from map_runtime import load_map
-from tower import BASE_TOWER_LEVELS, Tower
+from tower import BASE_TOWER_LEVELS, TOWER_TYPES, Tower
 
 MAP_DIRECTORY = Path(__file__).parent/'maps'
 MAP_PATH = MAP_DIRECTORY/'desert_highway.tmx'
@@ -67,6 +66,23 @@ def draw_tower(surface, tower, selected):
     x, y, r = P(tower.x), P(tower.y), P(tower.radius)
     level = min(tower.level, len(LEVEL_COLORS)-1)
     body = LEVEL_COLORS[level]
+    if tower.tower_type != 'cannon':
+        color = (96,218,246) if tower.tower_type == 'cryo' else (235,155,83)
+        pygame.draw.polygon(surface,TOWER_DARK,_polygon(x,y,r+P(2),6,pi/6))
+        pygame.draw.polygon(surface,color,_polygon(x,y,r-P(3),6,pi/6))
+        if tower.tower_type == 'cryo':
+            for k in range(3):
+                angle=k*pi/3
+                dx,dy=cos(angle)*P(9),sin(angle)*P(9)
+                pygame.draw.line(surface,(235,255,255),(x-dx,y-dy),(x+dx,y+dy),P(2))
+        else:
+            pygame.draw.circle(surface,TOWER_DARK,(x,y),P(9))
+            pygame.draw.circle(surface,(12,18,24),(x,y-P(2)),P(5))
+        for i in range(tower.level+1):
+            pygame.draw.circle(surface,(255,245,220),(x+P(i*7-tower.level*3.5),y+r+P(4)),P(2))
+        if selected:
+            pygame.draw.circle(surface,(255,255,255),(x,y),r+P(5),P(2))
+        return
     if level == 0:
         pygame.draw.circle(surface, TOWER_DARK, (x, y), r)
         pygame.draw.circle(surface, body, (x, y), r-P(4))
@@ -117,11 +133,11 @@ def draw_range(surface, x, y, rng, color):
     surface.blit(overlay, (0, 0))
 
 
-def draw_placement(surface, x, y, ok):
+def draw_placement(surface, x, y, ok, tower_type='cannon'):
     P = ui.px
     color = PLACE_OK if ok else PLACE_BLOCKED
     if ok:
-        draw_range(surface, x, y, BASE_TOWER_LEVELS[0].range, color)
+        draw_range(surface, x, y, TOWER_TYPES[tower_type].levels[0].range, color)
     overlay = pygame.Surface((P(TOWER_RADIUS*2+8), P(TOWER_RADIUS*2+8)), pygame.SRCALPHA)
     c = overlay.get_width()//2
     pygame.draw.circle(overlay, (*color, 110), (c, c), P(TOWER_RADIUS))
@@ -135,7 +151,8 @@ def draw_placement(surface, x, y, ok):
 
 class GameScreen:
     def __init__(self, difficulty, on_exit, on_finish=None, sandbox=False, on_checkpoint=None, resume=None,
-                 on_achievements=None, achievements=()):
+                 on_achievements=None, achievements=(), manual_start=False):
+        self.manual_start = manual_start
         self.difficulty = difficulty
         self.on_achievements = on_achievements
         self.known_achievements = set(achievements)
@@ -146,16 +163,21 @@ class GameScreen:
         self.on_checkpoint = on_checkpoint
         self.map = load_map(difficulty['map_path'])
         self.art = pygame.transform.smoothscale(self.map.artwork, (ui.px(MAP_SIZE[0]), ui.px(MAP_SIZE[1])))
-        self.upgrade_button = pygame.Rect(790, 586, 155, 44)
-        self.menu_button = pygame.Rect(676, 586, 104, 44)
-        self.pause_button = pygame.Rect(564, 586, 50, 44)
-        self.speed_button = pygame.Rect(620, 586, 50, 44)
+        self.upgrade_button = pygame.Rect(790, 700, 155, 44)
+        self.menu_button = pygame.Rect(676, 700, 104, 44)
+        self.pause_button = pygame.Rect(564, 700, 50, 44)
+        self.speed_button = pygame.Rect(620, 700, 50, 44)
+        self.shop_buttons = {kind:pygame.Rect(12+i*242,584,232,56) for i,kind in enumerate(TOWER_TYPES)}
+        self.start_button = pygame.Rect(738,584,210,56)
         self.levels_button = ui.Button((330, 418, 142, 44), 'Levels', 'secondary')
         self.again_button = ui.Button((488, 418, 142, 44), 'Play again')
         self.restart(resume)
 
     def restart(self, resume=None):
-        self.session = GameSession(self.difficulty['name'], sandbox=self.sandbox)
+        self.session = GameSession(self.difficulty['name'], sandbox=self.sandbox,manual_start=self.manual_start)
+        self.build_type = 'cannon'
+        self.feedback = ''
+        self.effects = []
         self.towers, self.enemies, self.shots = [], [], []
         self.resumed = False
         if resume is not None:
@@ -166,7 +188,7 @@ class GameScreen:
                 self.towers = [self.rebuild_tower(t) for t in resume['towers']]
                 self.resumed = True
             except (KeyError, TypeError, ValueError):
-                self.session = GameSession(self.difficulty['name'], sandbox=self.sandbox)
+                self.session = GameSession(self.difficulty['name'], sandbox=self.sandbox,manual_start=self.manual_start)
                 self.towers = []
         self.saved_wave = self.session.waves_cleared
         self.spawn_lane = 0
@@ -184,7 +206,7 @@ class GameScreen:
 
     @staticmethod
     def rebuild_tower(data):
-        tower = Tower(float(data['x']), float(data['y']), TOWER_RADIUS)
+        tower = Tower(float(data['x']), float(data['y']), TOWER_RADIUS,tower_type=data.get('type','cannon'))
         for _ in range(int(data['level'])):
             if tower.can_upgrade:
                 tower.upgrade()
@@ -194,7 +216,8 @@ class GameScreen:
         if self.on_checkpoint is None or self.session.waves_cleared == 0 or self.session.finished:
             return
         state = {**self.session.snapshot(),
-                 'towers': [{'x': round(t.x, 1), 'y': round(t.y, 1), 'level': t.level} for t in self.towers]}
+                 'towers': [{'x': round(t.x, 1), 'y': round(t.y, 1), 'level': t.level,
+                             'type':t.tower_type} for t in self.towers]}
         if self.difficulty['name'] == 'Impossible':
             state['map_id'] = 'calderas_edge-v1'
         self.saved_wave = self.session.waves_cleared
@@ -230,6 +253,9 @@ class GameScreen:
             self.selected.upgrade()
             self.award(self.tracker.tower_upgraded(self.selected))
             self.money_changed()
+            self.feedback = f'{self.selected.spec.name} upgraded to level {self.selected.level+1}.'
+        elif cost is not None:
+            self.feedback = f'Need ${cost} to upgrade; you have ${self.session.economy.money}.'
 
     def finish(self):
         self.result = self.session.result()
@@ -278,6 +304,12 @@ class GameScreen:
                 self.show_zones = not self.show_zones
             elif event.key == pygame.K_u:
                 self.try_upgrade()
+            elif event.key in (pygame.K_1,pygame.K_2,pygame.K_3):
+                self.build_type = tuple(TOWER_TYPES)[event.key-pygame.K_1]
+                self.selected = None
+                self.feedback = ''
+            elif event.key == pygame.K_RETURN:
+                self.session.start_first_wave()
             elif event.key == pygame.K_n and self.sandbox:
                 self.session.skip_break()
             elif event.key == pygame.K_z and self.towers:
@@ -288,8 +320,18 @@ class GameScreen:
                     self.selected = None
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
             self.selected = None
+            self.build_type = None
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             x, y = event.pos
+            for kind,rect in self.shop_buttons.items():
+                if rect.collidepoint(x,y):
+                    self.build_type=kind
+                    self.selected=None
+                    self.feedback=''
+                    return
+            if self.start_button.collidepoint(x,y):
+                self.session.start_first_wave()
+                return
             if self.menu_button.collidepoint(x, y):
                 self.leave()
             elif self.pause_button.collidepoint(x, y):
@@ -302,12 +344,18 @@ class GameScreen:
                 clicked = next((t for t in self.towers if t.contains(x, y)), None)
                 if clicked is not None:
                     self.selected = clicked
-                elif (self.map.can_place(x, y, TOWER_RADIUS, self.footprints())
-                      and self.session.economy.spend(TOWER_COST)):
-                    self.towers.append(Tower(x, y, TOWER_RADIUS))
-                    self.selected = None
-                    self.award(self.tracker.tower_built(len(self.towers)))
-                    self.money_changed()
+                elif self.build_type is not None and 0<=x<960 and 0<=y<576:
+                    spec=TOWER_TYPES[self.build_type]
+                    if not self.map.can_place(x,y,TOWER_RADIUS,self.footprints()):
+                        self.feedback='Cannot build here. Use clear build ground; B shows exact zones.'
+                    elif not self.session.economy.spend(spec.cost):
+                        self.feedback=f'Need ${spec.cost} for {spec.name}; you have ${self.session.economy.money}.'
+                    else:
+                        self.towers.append(Tower(x,y,TOWER_RADIUS,tower_type=self.build_type))
+                        self.selected=None
+                        self.feedback=f'{spec.name} built.'
+                        self.award(self.tracker.tower_built(len(self.towers)))
+                        self.money_changed()
                 else:
                     self.selected = None
 
@@ -331,6 +379,8 @@ class GameScreen:
         if self.session.waves_cleared > self.tracked_wave:
             self.tracked_wave = self.session.waves_cleared
             self.award(self.tracker.wave_cleared(self.tracked_wave))
+            if not self.sandbox:
+                self.feedback=f'Wave {self.tracked_wave} cleared: +${WAVE_CLEAR_BONUS} bonus.'
         if self.session.waves_cleared > self.saved_wave:
             self.checkpoint()
         for enemy in self.enemies:
@@ -340,10 +390,15 @@ class GameScreen:
                                lambda enemy, t=tower: self.map.can_target(t.x, t.y, enemy.pos))
             if hit is not None:
                 muzzle = (tower.x+tower.aim[0]*(TOWER_RADIUS+6), tower.y+tower.aim[1]*(TOWER_RADIUS+6))
-                self.shots.append([muzzle, hit.pos, SHOT_FLASH])
-                if hit.hp == 0:
-                    self.session.enemy_killed()
-                    self.money_changed()
+                if tower.tower_type == 'mortar':
+                    self.effects.append([hit.pos,tower.stats.splash_radius,.3,'mortar'])
+                else:
+                    self.shots.append([muzzle, hit.pos, SHOT_FLASH,
+                                       (100,225,255) if tower.tower_type=='cryo' else (255,235,140)])
+                for victim in tower.last_hits:
+                    if victim.hp == 0:
+                        self.session.enemy_killed()
+                        self.money_changed()
         for enemy in self.enemies:
             if enemy.reached_end:
                 self.session.enemy_leaked()
@@ -351,6 +406,9 @@ class GameScreen:
         for shot in self.shots:
             shot[2] -= dt
         self.shots = [s for s in self.shots if s[2] > 0]
+        for effect in self.effects:
+            effect[2] -= dt
+        self.effects = [e for e in self.effects if e[2]>0]
         if self.session.finished:
             self.finish()
 
@@ -371,32 +429,61 @@ class GameScreen:
                 continue
             ex, ey = enemy.pos
             pygame.draw.circle(screen, (35, 30, 25), (P(ex+2), P(ey+3)), P(9))
-            pygame.draw.circle(screen, (232, 78, 53), (P(ex), P(ey)), P(8))
+            pygame.draw.circle(screen, (100,220,245) if getattr(enemy,'slow_remaining',0)>0 else (232,78,53), (P(ex), P(ey)), P(8))
             pygame.draw.rect(screen, (60, 20, 20), ui.scaled((ex-9, ey-15, 18, 4)))
             pygame.draw.rect(screen, (90, 220, 110), (P(ex-9), P(ey-15), P(18*enemy.hp/enemy.max_hp), P(4)))
         for tower in self.towers:
             draw_tower(screen, tower, tower is self.selected)
-        for (sx, sy), (tx, ty), _ in self.shots:
-            pygame.draw.line(screen, (255, 235, 140), (P(sx), P(sy)), (P(tx), P(ty)), P(3))
+        for (sx, sy), (tx, ty), _, color in self.shots:
+            pygame.draw.line(screen, color, (P(sx), P(sy)), (P(tx), P(ty)), P(3))
+        for (x,y),radius,remaining,_ in self.effects:
+            pygame.draw.circle(screen,(255,180,85),(P(x),P(y)),max(1,P(radius*(1-remaining/.3))),P(2))
 
     def draw_hud(self, screen, mx, my):
         s = self.session
+        ui.rounded(screen,(0,576,960,204),(26,29,34),0)
+        colors={'cannon':(133,185,209),'cryo':(96,218,246),'mortar':(235,155,83)}
+        for i,(kind,rect) in enumerate(self.shop_buttons.items()):
+            spec=TOWER_TYPES[kind]
+            affordable=s.economy.can_afford(spec.cost)
+            chosen=kind==self.build_type
+            fill=(49,68,83) if chosen else (38,42,49)
+            ui.rounded(screen,rect,fill,8,colors[kind] if chosen else (70,75,83),2 if chosen else 1)
+            demo=Tower(rect.x+25,rect.y+27,tower_type=kind)
+            draw_tower(screen,demo,False)
+            price='Free' if self.sandbox else f'${spec.cost}'
+            ui.text(screen,f'{i+1}  {spec.name}  {price}',16,colors[kind] if affordable else (160,160,160),(rect.x+50,rect.y+8),bold=True)
+            tag={'cannon':'Single target','cryo':'Slow + low damage','mortar':'Area damage'}[kind]
+            ui.text(screen,tag if affordable else 'Not enough money',12,(210,210,210),(rect.x+50,rect.y+32))
+        ready=s.awaiting_start and self.result is None
+        ui.rounded(screen,self.start_button,(57,124,82) if ready else (38,42,49),8)
+        ui.text(screen,'Start wave 1 [Enter]' if ready else f'{self.difficulty["name"]}  /  {"Sandbox" if self.sandbox else "Normal"}',14,(240,240,230),self.start_button.center,bold=True,anchor='center')
         if self.sandbox:
             stats = f'Wave {max(1, s.wave)}   Leaked {s.leaked}   Kills {s.kills}   Money ∞'
         else:
             stats = f'Wave {max(1, s.wave)}/{s.clear_wave}   Lives {s.lives}   Kills {s.kills}   Money ${s.economy.money}'
-        ui.text(screen, stats, 15, (236, 233, 223), (18, 588), bold=True)
-        chip = ui.chip(screen, self.difficulty['name'].upper(), self.difficulty['color'], (30+ui.text_width(stats, 15, True), 587))
-        if self.sandbox:
-            ui.chip(screen, 'SANDBOX', SANDBOX_COLOR, (chip.right+8, 587))
+        ui.text(screen, stats, 15, (236, 233, 223), (18, 712), bold=True)
         if self.selected is not None:
             t = self.selected.stats
-            info = f'Selected: level {self.selected.level+1}/{len(self.selected.levels)}   range {t.range:g}   dmg {t.damage:g}   rate {t.fire_rate:g}/s'
+            info = f'{self.selected.spec.name} L{self.selected.level+1}/3  |  {t.damage:g} damage, {t.fire_rate:g}/sec, range {t.range:g}'
+            if t.slow_duration:
+                info+=f'  |  {round((1-t.slow_factor)*100)}% slow for {t.slow_duration:g}s'
+            if t.splash_radius:
+                info+=f'  |  Splash radius {t.splash_radius:g}'
+            if self.selected.can_upgrade:
+                nxt=self.selected.levels[self.selected.level+1]
+                detail=f'Next: {nxt.damage:g} damage, {nxt.fire_rate:g}/sec, range {nxt.range:g}'
+                if nxt.slow_duration:detail+=f', {round((1-nxt.slow_factor)*100)}% slow for {nxt.slow_duration:g}s'
+                if nxt.splash_radius:detail+=f', splash {nxt.splash_radius:g}'
+            else:
+                detail='Maximum level reached.'
         else:
-            info = f'Click: build (${TOWER_COST}) / select   U: upgrade   Z: refund   Space: pause   F: speed   Esc: menu'
-            if self.sandbox:
-                info = 'Click: place / select   U: upgrade   Z: undo   N: next wave   Space: pause   F: speed   Esc: menu'
-        ui.text(screen, info, 13, (189, 185, 175), (18, 614))
+            spec=TOWER_TYPES.get(self.build_type)
+            info=f'Building {spec.name}: {spec.description}' if spec else 'Placement canceled. Select a tower type or press 1 / 2 / 3.'
+            detail=self.feedback or 'All towers need line of sight. Enemies inside tunnels are protected.'
+        ui.text(screen,info,14,(230,228,220),(18,648))
+        ui.text(screen,detail,13,(190,200,210),(18,673))
+        ui.text(screen,'1/2/3: tower type   Right-click: cancel   U: upgrade   Z: full refund   B: zones   Space: pause   F: speed',12,(180,185,194),(18,754))
         self.draw_controls(screen, mx, my)
         hover = self.menu_button.collidepoint(mx, my)
         ui.rounded(screen, self.menu_button, (78, 82, 92) if hover else (60, 63, 70), 8)
@@ -408,13 +495,13 @@ class GameScreen:
         ui.rounded(screen, self.upgrade_button, fill, 8)
         label = ('Max level' if self.selected is not None and upgrade_cost is None
                  else f'Upgrade (${upgrade_cost})' if upgrade_cost is not None and not self.sandbox
-                 else 'Upgrade (free)')
+                 else 'Upgrade (free)' if self.selected is not None else 'Select a tower')
         ui.text(screen, label, 15, (245, 245, 240) if enabled else (140, 140, 145), self.upgrade_button.center, bold=True, anchor='center')
         if self.result is not None:
             return
         preview = s.next_wave()
         if s.between_waves:
-            banner = f'Wave {s.wave+1} starting in {max(1, round(s.break_timer+0.49))}'
+            banner = 'Place your defenses, then press Enter' if s.awaiting_start else f'Wave {s.wave+1} starting in {max(1, round(s.break_timer+0.49))}'
             if preview is not None:
                 banner += f'   ·   {preview.count} enemies, {preview.hp} HP each'
             if self.sandbox:
@@ -477,9 +564,9 @@ class GameScreen:
         mx, my = ui.mouse_pos()
         if self.result is None:
             over_tower = any(t.contains(mx, my) for t in self.towers)
-            if 0 <= mx < MAP_SIZE[0] and 0 <= my < MAP_SIZE[1] and not over_tower:
+            if self.build_type is not None and 0 <= mx < MAP_SIZE[0] and 0 <= my < MAP_SIZE[1] and not over_tower:
                 draw_placement(screen, mx, my, self.map.can_place(mx, my, TOWER_RADIUS, self.footprints())
-                               and self.session.economy.can_afford(TOWER_COST))
+                               and self.session.economy.can_afford(TOWER_TYPES[self.build_type].cost),self.build_type)
         if self.clock.paused and self.result is None:
             ui.dim(screen, (20, 14, 6, 90))
             ui.rounded(screen, (380, 250, 200, 76), (30, 50, 104, 235), 16)
